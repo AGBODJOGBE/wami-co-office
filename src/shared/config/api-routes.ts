@@ -68,6 +68,13 @@ export const API = {
   },
   drivers: {
     list: `${A}/drivers`,
+    pending: `${A}/drivers/pending`,
+    online: `${A}/drivers/online`,
+    approve: (id: string) => `${A}/drivers/${id}/approve`,
+    type: (id: string) => `${A}/drivers/${id}/driver-type`,
+    info: (id: string) => `${A}/drivers/${id}/info`,
+    sessions: (id: string) => `${A}/drivers/${id}/sessions`,
+    connectionTime: `${A}/drivers/connection-time`,
     suspend: (id: string) => `${A}/drivers/${id}/suspend`,
     reactivate: (id: string) => `${A}/drivers/${id}/reactivate`,
   },

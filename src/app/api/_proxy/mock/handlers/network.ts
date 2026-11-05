@@ -6,6 +6,12 @@ import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Candidatures de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockPending: Array<{ driverId: string; userId: string; isDocumentsVerified: boolean; createdAt: string }> = [
+  { driverId: "cand-1", userId: "u-c1", isDocumentsVerified: true, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+  { driverId: "cand-2", userId: "u-c2", isDocumentsVerified: false, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
+];
+
 /** Configurations de primes de démonstration (état en mémoire, comme le reste du faux backend). */
 interface MockBonus {
   id: string;
@@ -75,6 +81,37 @@ export const networkRoutes: MockRoute[] = [
     const filtered = status ? drivers.filter((x) => x.status === status) : drivers;
     return { drivers: filtered, total: filtered.length };
   }),
+  // Candidatures, chauffeurs en ligne, type d'activité, sessions (contrat du backend WAMI).
+  route("GET", `${A}/drivers/pending`, "drivers", () => ({ drivers: mockPending, total: mockPending.length })),
+  route("PATCH", `${A}/drivers/:id/approve`, "drivers", ({ params, user }) => {
+    const i = mockPending.findIndex((p) => p.driverId === params.id);
+    if (i < 0) throw invalid("Driver not found");
+    mockPending.splice(i, 1);
+    audit(user, "Comptes", `A approuvé la candidature ${params.id}`);
+    return { driverId: params.id, status: "OFFLINE", message: "Driver has been approved" };
+  }),
+  route("GET", `${A}/drivers/online`, "drivers", () => {
+    const drivers = db().drivers.filter((d) => d.online && d.status === "active").map((d, i) => {
+      const [firstName = "", ...rest] = d.name.split(" ");
+      return { driverId: d.id, firstName, lastName: rest.join(" "), phoneNumber: d.phone, photoUrl: null, rating: d.rating, totalRides: d.missionsTotal, latitude: 6.37 + i * 0.01, longitude: 2.39 + i * 0.01, heading: null, speed: null, vehicle: { vehicleId: `v-${d.id}`, vehicleType: "MOTO", make: d.vehicle, model: "", color: "", licensePlate: "" }, currentRideId: null, isInRide: i % 2 === 1, updatedAt: new Date().toISOString() };
+    });
+    return { drivers, total: drivers.length };
+  }),
+  route("PATCH", `${A}/drivers/:id/driver-type`, "drivers", ({ params, body, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
+    const t = str(body, "driverType");
+    if (!["VTC", "DELIVERY", "BOTH"].includes(t)) throw invalid("driverType must be one of: VTC, DELIVERY, BOTH");
+    audit(user, "Comptes", `Type d’activité de ${d.name} : ${t}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, activities: t === "BOTH" ? ["driver", "courier"] : t === "DELIVERY" ? ["courier"] : ["driver"] });
+    return { driverId: d.id, driverType: t, message: `Driver type updated to ${t}.` };
+  }),
+  route("GET", `${A}/drivers/:id/sessions`, "drivers", ({ params }) => ({
+    sessions: [
+      { id: `${params.id}-s1`, driverId: params.id, startedAt: new Date(Date.now() - 7_200_000).toISOString(), endedAt: null, durationSeconds: null, endReason: null },
+      { id: `${params.id}-s2`, driverId: params.id, startedAt: new Date(Date.now() - 90_000_000).toISOString(), endedAt: new Date(Date.now() - 80_000_000).toISOString(), durationSeconds: 10_000, endReason: "LOGOUT" },
+    ],
+    total: 2, totalDurationSeconds: 10_000, page: 1, limit: 20,
+  })),
   route("PATCH", `${A}/drivers/:id/suspend`, "drivers", ({ params, body, user }) => {
     const d = find(db().drivers, (x) => x.id === params.id);
     const reason = str(body, "reason");

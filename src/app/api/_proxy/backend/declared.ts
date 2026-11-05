@@ -112,3 +112,10 @@ declareReal("POST", "/v1/admin/scheduled-rides/:id/manual-assignment");
 // Utilisateurs et paiements
 declareReal("GET", "/v1/admin/users");
 declareReal("GET", "/v1/admin/payments/intents");
+
+// Chauffeurs : candidatures, en ligne, type d'activité, sessions
+declareReal("GET", "/v1/admin/drivers/pending");
+declareReal("PATCH", "/v1/admin/drivers/:id/approve");
+declareReal("GET", "/v1/admin/drivers/online");
+declareReal("PATCH", "/v1/admin/drivers/:id/driver-type");
+declareReal("GET", "/v1/admin/drivers/:id/sessions");
