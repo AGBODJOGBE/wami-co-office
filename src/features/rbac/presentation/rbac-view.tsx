@@ -9,7 +9,7 @@ import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
 import { Dialog } from "@/shared/ui/dialog";
 import { MissingRoutes } from "@/shared/ui/missing-routes";
-import { Button, Card, CardHeader, Chip, Field, fieldClass, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
+import { Button, Card, CardHeader, Chip, Field, fieldClass, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { GrantDialog, RoleDialog } from "./role-dialogs";
 import { rbacUseCases } from "../application/rbac.use-cases";
