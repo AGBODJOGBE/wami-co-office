@@ -1,14 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
 import { dayMonth, fcfa } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
-import { Button, Card, CardHeader, Kpi, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
+import { MissingRoutes } from "@/shared/ui/missing-routes";
+import { Button, Card, CardHeader, Field, fieldClass, Kpi, Note, PageHeader, Tag, Toggle, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { referralsUseCases } from "../application/referrals.use-cases";
-import { REFERRAL_STATUS_LABELS, type Referral, type ReferralConfig, type ReferralStatus } from "../domain/referral";
+import { REFERRAL_STATUS_LABELS, type Referral, type ReferralConfig, type ReferralProgram, type ReferralStatus } from "../domain/referral";
 
 const TONE: Record<ReferralStatus, Tone> = { pending: "neutral", validated: "ok", expired: "bad" };
 
@@ -16,6 +18,7 @@ export function ReferralsView() {
   const stats = useResource(() => referralsUseCases.stats(), "stats");
   const configs = useResource(() => referralsUseCases.configs(), "configs");
   const list = useResource(() => referralsUseCases.list(), "referrals");
+  const program = useResource(() => referralsUseCases.program(), "program");
   const canWrite = useCanWrite("referrals");
   const { busy, run } = useAction();
 
@@ -129,6 +132,17 @@ export function ReferralsView() {
                           >
                             Faire expirer
                           </Button>
+                          <Button
+                            size="sm"
+                            disabled={!canWrite || busy}
+                            title="Route backend manquante : faux backend"
+                            onClick={async () => {
+                              const u = await run(() => referralsUseCases.flag(r), "Parrainage bloqué (faux backend).");
+                              if (u !== undefined) refresh();
+                            }}
+                          >
+                            Bloquer (fictif)
+                          </Button>
                         </span>
                       ) : null,
                   },
@@ -138,7 +152,46 @@ export function ReferralsView() {
           </ResourceView>
         </Card>
       </div>
+      <ResourceView state={program} onRetry={program.reload}>
+        {(p) => <ProgramCard initial={p} canWrite={canWrite} onSaved={(np) => program.mutate(() => np)} />}
+      </ResourceView>
+      <MissingRoutes area="referralProgram" />
       <Note>La création et la modification d’une configuration (matrice de récompenses, limites, conditions) arrivent dans un prochain écran ; l’activation est déjà possible ici.</Note>
     </>
+  );
+}
+
+function ProgramCard({ initial, canWrite, onSaved }: { initial: ReferralProgram; canWrite: boolean; onSaved: (p: ReferralProgram) => void }) {
+  const [p, setP] = useState(initial);
+  const { busy, run } = useAction();
+  return (
+    <Card className="flex flex-col gap-3 px-4 py-3.5">
+      <div className="flex items-center justify-between">
+        <b className="text-sm">Programme simple (données fictives)</b>
+        <Toggle checked={p.active} onChange={(v) => setP({ ...p, active: v })} label="Programme actif" disabled={!canWrite} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Récompense du parrain (F)">
+          <input className={fieldClass} inputMode="numeric" disabled={!canWrite} value={p.referrerReward} onChange={(e) => setP({ ...p, referrerReward: Number(e.target.value.replace(/\D/g, "")) })} />
+        </Field>
+        <Field label="Récompense du filleul (F)">
+          <input className={fieldClass} inputMode="numeric" disabled={!canWrite} value={p.refereeReward} onChange={(e) => setP({ ...p, refereeReward: Number(e.target.value.replace(/\D/g, "")) })} />
+        </Field>
+        <Field label="Missions à faire par le filleul">
+          <input className={fieldClass} inputMode="numeric" disabled={!canWrite} value={p.requiredMissions} onChange={(e) => setP({ ...p, requiredMissions: Number(e.target.value.replace(/\D/g, "")) })} />
+        </Field>
+      </div>
+      <Button
+        tone="primary"
+        busy={busy}
+        disabled={!canWrite}
+        onClick={async () => {
+          const r = await run(() => referralsUseCases.saveProgram(p), "Programme mis à jour (faux backend).");
+          if (r) onSaved(r);
+        }}
+      >
+        Enregistrer
+      </Button>
+    </Card>
   );
 }

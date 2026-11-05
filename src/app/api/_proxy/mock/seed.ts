@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   B2bAccount,
   Campaign,
+  Challenge,
   Commission,
   Contract,
   Courier,
@@ -57,6 +58,7 @@ export interface MockDb {
   affiliates: Affiliate[];
   referralProgram: ReferralProgram;
   referrals: Referral[];
+  challenges: Challenge[];
   campaigns: Campaign[];
   zones: Zone[];
   tariffs: Record<string, Tariff[]>;
@@ -484,6 +486,11 @@ export function seed(): MockDb {
       { id: "af-1", name: "[Apporteur] Agence Mobilité Plus", kind: "agency", phone: "+229 01 96 00 10 10", code: "MOBPLUS", activations: 42, pending: 6, ratePerActivation: 5_000, paid: 150_000, status: "active" },
       { id: "af-2", name: "[Apporteur] Théophile K.", kind: "individual", phone: "+229 01 96 00 20 20", code: "THEO", activations: 9, pending: 2, ratePerActivation: 5_000, paid: 40_000, status: "active" },
       { id: "af-3", name: "[Apporteur] Moto Club Calavi", kind: "agency", phone: "+229 01 96 00 30 30", code: "MCCALAVI", activations: 3, pending: 0, ratePerActivation: 5_000, paid: 0, status: "suspended" },
+    ],
+    challenges: [
+      { id: "ch-1", title: "Rush de fin de mois", zone: "Cotonou centre", service: "ride", targetMissions: 60, reward: 10_000, startsAt: daysAgo(4), endsAt: daysFromNow(3), participants: 182, achievers: 37, archived: false },
+      { id: "ch-2", title: "Livreurs du week-end", zone: "Cotonou centre", service: "delivery", targetMissions: 25, reward: 5_000, startsAt: daysFromNow(2), endsAt: daysFromNow(4), participants: 0, achievers: 0, archived: false },
+      { id: "ch-3", title: "Lancement Abomey-Calavi", zone: "Abomey-Calavi", service: "all", targetMissions: 40, reward: 8_000, startsAt: daysAgo(30), endsAt: daysAgo(16), participants: 64, achievers: 21, archived: false },
     ],
     referralProgram: { active: true, referrerReward: 1000, refereeReward: 500, requiredMissions: 2 },
     referrals: [

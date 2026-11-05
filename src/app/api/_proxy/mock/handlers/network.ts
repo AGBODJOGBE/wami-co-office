@@ -2,6 +2,7 @@ import "server-only";
 import { audit, db, newId } from "../db";
 import { find, num, replace, requireText, str } from "../helpers";
 import { invalid, route, type MockRoute } from "../router";
+import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
 
@@ -198,6 +199,20 @@ export const networkRoutes: MockRoute[] = [
     for (const k of ["welcomeBonusEnabled", "activityBonusEnabled", "qualityBonusEnabled"] as const) if (typeof body[k] === "boolean") bonusRun[k] = body[k];
     audit(user, "Argent", "Calendrier des primes modifié");
     return bonusRun;
+  }),
+
+  // ── Défis chauffeurs ── (route absente du backend : données fictives)
+  route("GET", `${A}/driver-bonus/challenges`, "driver-bonus", () => db().challenges),
+  route("POST", `${A}/driver-bonus/challenges`, "driver-bonus", ({ body, user }) => {
+    const c: Challenge = { ...(body as unknown as Omit<Challenge, "id" | "participants" | "achievers" | "archived">), id: newId("ch"), participants: 0, achievers: 0, archived: false };
+    db().challenges.unshift(c);
+    audit(user, "Argent", `A créé le challenge « ${c.title} » (${c.targetMissions} missions → ${c.reward} F)`);
+    return c;
+  }),
+  route("PATCH", `${A}/driver-bonus/challenges/:id`, "driver-bonus", ({ params, user }) => {
+    const c = find(db().challenges, (x) => x.id === params.id);
+    audit(user, "Réglages", `A archivé le challenge « ${c.title} »`);
+    return replace(db().challenges, (x) => x.id === c.id, { ...c, archived: true });
   }),
 
   // ── Établissements ──

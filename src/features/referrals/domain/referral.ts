@@ -55,3 +55,20 @@ export function deleteBlocker(c: ReferralConfig): string | null {
 export function activateBlocker(c: ReferralConfig): string | null {
   return c.active ? "Cette configuration est déjà active." : null;
 }
+
+/** Programme simple « récompense parrain / filleul » : route absente du backend (faux backend). */
+export interface ReferralProgram {
+  active: boolean;
+  referrerReward: number;
+  refereeReward: number;
+  /** Missions que le filleul doit terminer pour débloquer les récompenses. */
+  requiredMissions: number;
+}
+
+export function programBlocker(p: ReferralProgram): string | null {
+  for (const v of [p.referrerReward, p.refereeReward]) {
+    if (!Number.isInteger(v) || v < 0 || v > 5000) return "Récompenses entre 0 et 5 000 F.";
+  }
+  if (!Number.isInteger(p.requiredMissions) || p.requiredMissions < 1 || p.requiredMissions > 10) return "Missions requises entre 1 et 10.";
+  return null;
+}

@@ -2,7 +2,7 @@ import "server-only";
 import { audit, db, newId } from "../db";
 import { find, num, replace, requireText, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
-import type { Campaign } from "../seed-types";
+import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
@@ -91,6 +91,17 @@ export const moneyRoutes: MockRoute[] = [
     audit(user, "Argent", `A débloqué les retraits de ${w.ownerName}`);
     replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: false, withdrawalsBlockedReason: null });
     return { walletId: w.id, withdrawalsBlocked: false, withdrawalsBlockedReason: null, withdrawalsBlockedAt: null, withdrawalsBlockedBy: null };
+  }),
+
+  // Route absente du backend (faux backend) : ajustement manuel.
+  route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
+    const w = find(db().wallets, (x) => x.id === params.id, "Route absente du backend : l’ajustement ne marche que sur les portefeuilles fictifs.");
+    const amount = num(body, "amount");
+    const reason = str(body, "reason");
+    requireText(reason, 10, "Motif obligatoire.");
+    if (!Number.isInteger(amount) || amount === 0) throw invalid("Montant invalide.");
+    audit(user, "Argent", `Ajustement de ${amount} F sur le portefeuille de ${w.ownerName} · ${reason}`);
+    return replace(db().wallets, (x) => x.id === w.id, { ...w, balance: w.balance + amount, movements: [{ id: newId("wm"), at: new Date().toISOString(), label: `Ajustement : ${reason}`, amount }, ...w.movements] });
   }),
 
   // ── Finances ──
@@ -195,6 +206,14 @@ export const moneyRoutes: MockRoute[] = [
       return { affiliateId: a.id, status: status.toUpperCase() };
     }),
   ),
+  // Route absente du backend (faux backend) : versement direct.
+  route("POST", `${A}/affiliates/:id/payouts`, "affiliate", ({ params, body, user }) => {
+    const a = find(db().affiliates, (x) => x.id === params.id, "Route absente du backend : le versement ne marche que sur les affiliés fictifs.");
+    const amount = num(body, "amount");
+    if (!(amount > 0)) throw invalid("Montant invalide.");
+    audit(user, "Argent", `A versé ${amount} F à ${a.name}`);
+    return replace(db().affiliates, (x) => x.id === a.id, { ...a, paid: a.paid + amount });
+  }),
   route("PATCH", `${A}/affiliates/:id/commission-rate`, "affiliate", ({ params, body, user }) => {
     const a = find(db().affiliates, (x) => x.id === params.id);
     const rate = typeof body.commissionRate === "number" ? body.commissionRate : null;
@@ -219,6 +238,18 @@ export const moneyRoutes: MockRoute[] = [
       createdAt: r.createdAt,
     })),
   ),
+  // Routes absentes du backend (faux backend) : programme simple et blocage.
+  route("GET", `${A}/referrals/program`, "referrals", () => db().referralProgram),
+  route("PUT", `${A}/referrals/program`, "referrals", ({ body, user }) => {
+    db().referralProgram = body as unknown as ReferralProgram;
+    audit(user, "Argent", "A modifié le programme de parrainage");
+    return db().referralProgram;
+  }),
+  route("POST", `${A}/referrals/:id/flag`, "referrals", ({ params, user }) => {
+    const r = find(db().referrals, (x) => x.id === params.id, "Route absente du backend : le blocage ne marche que sur les parrainages fictifs.");
+    audit(user, "Argent", `Parrainage ${r.id} bloqué`);
+    return replace(db().referrals, (x) => x.id === r.id, { ...r, status: "flagged" });
+  }),
   route("GET", `${A}/referrals/stats`, "referrals", () => {
     const rows = db().referrals;
     const rewarded = rows.filter((r) => r.status === "rewarded").length;

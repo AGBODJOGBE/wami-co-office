@@ -1,5 +1,5 @@
 import { fail, guard } from "@/shared/lib/result";
-import { activateBlocker, deleteBlocker, validateBlocker, type Referral, type ReferralConfig } from "../domain/referral";
+import { activateBlocker, deleteBlocker, programBlocker, validateBlocker, type Referral, type ReferralConfig, type ReferralProgram } from "../domain/referral";
 import type { ReferralsRepository } from "../domain/referrals.repository";
 import { HttpReferralsRepository } from "./referrals.http-repository";
 
@@ -17,6 +17,17 @@ export function createReferralsUseCases(repo: ReferralsRepository) {
       const blocker = validateBlocker(r);
       if (blocker) return fail("validation", blocker);
       return guard(() => repo.expire(r.id));
+    },
+    program: () => guard(() => repo.program()),
+    saveProgram: async (p: ReferralProgram) => {
+      const blocker = programBlocker(p);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.saveProgram(p));
+    },
+    flag: async (r: Referral) => {
+      const blocker = validateBlocker(r);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.flag(r.id, "Bloqué depuis le back-office"));
     },
     activate: async (c: ReferralConfig) => {
       const blocker = activateBlocker(c);

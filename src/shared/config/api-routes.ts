@@ -96,6 +96,9 @@ export const API = {
     qualityLedger: `${A}/driver-bonus/quality-ledger`,
     runConfig: `${A}/driver-bonus/run-config`,
     welcomeBonus: `${A}/driver-welcome-bonus`,
+    // Absentes du backend (faux backend) : voir missing-routes.ts
+    challenges: `${A}/driver-bonus/challenges`,
+    challenge: (id: string) => `${A}/driver-bonus/challenges/${id}`,
   },
   establishments: {
     list: `${A}/establishments`,
@@ -111,6 +114,8 @@ export const API = {
   wallet: {
     list: `${A}/wallets`,
     detail: (id: string) => `${A}/wallets/${id}`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
+    adjust: (id: string) => `${A}/wallets/${id}/adjustments`,
     blockWithdrawals: (id: string) => `${A}/wallets/${id}/withdrawals/block`,
     unblockWithdrawals: (id: string) => `${A}/wallets/${id}/withdrawals/unblock`,
     transactions: `${A}/transactions`,
@@ -158,6 +163,8 @@ export const API = {
     reactivate: (id: string) => `${A}/affiliates/${id}/reactivate`,
     close: (id: string) => `${A}/affiliates/${id}/close`,
     reopen: (id: string) => `${A}/affiliates/${id}/reopen`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
+    pay: (id: string) => `${A}/affiliates/${id}/payouts`,
   },
   referrals: {
     list: `${A}/referrals`,
@@ -173,6 +180,9 @@ export const API = {
     config: (id: string) => `${A}/referrals/config/${id}`,
     activateConfig: (id: string) => `${A}/referrals/config/${id}/activate`,
     deactivateConfig: (id: string) => `${A}/referrals/config/${id}/deactivate`,
+    // Absentes du backend (faux backend) : voir missing-routes.ts
+    program: `${A}/referrals/program`,
+    flag: (id: string) => `${A}/referrals/${id}/flag`,
   },
   notifications: {
     campaigns: `${A}/notifications/campaigns`,

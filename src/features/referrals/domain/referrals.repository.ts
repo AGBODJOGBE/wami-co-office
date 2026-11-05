@@ -1,4 +1,4 @@
-import type { Referral, ReferralConfig, ReferralStats } from "./referral";
+import type { Referral, ReferralConfig, ReferralProgram, ReferralStats } from "./referral";
 
 export interface ReferralsRepository {
   list(): Promise<Referral[]>;
@@ -9,4 +9,8 @@ export interface ReferralsRepository {
   activate(configId: string): Promise<void>;
   deactivate(configId: string): Promise<void>;
   remove(configId: string): Promise<void>;
+  /** Routes absentes du backend : servies par le faux backend. */
+  program(): Promise<ReferralProgram>;
+  saveProgram(p: ReferralProgram): Promise<ReferralProgram>;
+  flag(id: string, reason: string): Promise<void>;
 }

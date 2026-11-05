@@ -1,5 +1,5 @@
 import { fail, guard } from "@/shared/lib/result";
-import { closeBlocker, reactivateBlocker, rateBlocker, reopenBlocker, suspendBlocker, type Affiliate, type SuspensionMode } from "../domain/affiliate";
+import { payoutBlocker, closeBlocker, reactivateBlocker, rateBlocker, reopenBlocker, suspendBlocker, type Affiliate, type SuspensionMode } from "../domain/affiliate";
 import type { AffiliateRepository } from "../domain/affiliate.repository";
 import { HttpAffiliateRepository } from "./affiliate.http-repository";
 
@@ -25,6 +25,11 @@ export function createAffiliateUseCases(repo: AffiliateRepository) {
       const blocker = reopenBlocker(a, reason);
       if (blocker) return fail("validation", blocker);
       return guard(() => repo.reopen(a.id, reason.trim()));
+    },
+    pay: async (a: Affiliate, amount: number) => {
+      const blocker = payoutBlocker(a, amount);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.pay(a.id, amount));
     },
     setCommissionRate: async (a: Affiliate, rate: number | null) => {
       const blocker = rateBlocker(rate);

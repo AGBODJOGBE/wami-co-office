@@ -62,3 +62,14 @@ export function rateBlocker(rate: number | null): string | null {
   if (!(rate >= 0 && rate <= 1)) return "Le taux doit être compris entre 0 % et 100 %.";
   return null;
 }
+
+/** Montant minimum d'un versement direct (à valider). Route absente du backend : faux backend. */
+export const MIN_AFFILIATE_PAYOUT = 5000;
+
+export function payoutBlocker(a: Affiliate, amount: number): string | null {
+  if (a.status !== "active") return "Affilié non actif.";
+  if (!Number.isInteger(amount) || amount <= 0) return "Montant invalide.";
+  if (amount > a.outstanding) return "Le montant dépasse ce qui est dû.";
+  if (amount < MIN_AFFILIATE_PAYOUT) return `Versement minimum : ${MIN_AFFILIATE_PAYOUT} F.`;
+  return null;
+}

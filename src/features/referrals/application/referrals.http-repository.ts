@@ -1,6 +1,6 @@
 import { API } from "@/shared/config/api-routes";
 import { http } from "@/shared/lib/http";
-import type { Referral, ReferralConfig, ReferralStats, ReferralStatus } from "../domain/referral";
+import type { Referral, ReferralConfig, ReferralProgram, ReferralStats, ReferralStatus } from "../domain/referral";
 import type { ReferralsRepository } from "../domain/referrals.repository";
 
 /** Élément de `GET /api/admin/referrals` (backend wami-co). */
@@ -83,5 +83,14 @@ export class HttpReferralsRepository implements ReferralsRepository {
   }
   async remove(configId: string) {
     await http.delete(API.referrals.config(configId));
+  }
+  program() {
+    return http.get<ReferralProgram>(API.referrals.program);
+  }
+  saveProgram(p: ReferralProgram) {
+    return http.put<ReferralProgram>(API.referrals.program, p);
+  }
+  async flag(id: string, reason: string) {
+    await http.post(API.referrals.flag(id), { reason });
   }
 }

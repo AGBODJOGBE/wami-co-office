@@ -9,13 +9,15 @@ import { DataTable } from "@/shared/ui/data-table";
 import { Button, Card, CardHeader, Note, PageHeader, Segmented, Tag, Toggle } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { driverBonusUseCases } from "../application/driver-bonus.use-cases";
+import { ChallengesPanel } from "./challenges-panel";
 import { BONUS_FAMILY_LABELS, BONUS_LEDGER_LABELS, type BonusConfig, type BonusEntry, type BonusFamily, type BonusLedger, type BonusRunConfig } from "../domain/bonus";
 
-const FAMILIES = (Object.keys(BONUS_FAMILY_LABELS) as BonusFamily[]).map((f) => [f, BONUS_FAMILY_LABELS[f]] as const);
+type Tab = BonusFamily | "challenges";
+const FAMILIES: ReadonlyArray<readonly [Tab, string]> = [...(Object.keys(BONUS_FAMILY_LABELS) as BonusFamily[]).map((f) => [f, BONUS_FAMILY_LABELS[f]] as const), ["challenges", "Défis (fictifs)"] as const];
 const LEDGER_OF: Record<BonusFamily, BonusLedger[]> = { tier: ["awards"], activity: ["activityLedger", "activityPayouts"], quality: ["qualityLedger"] };
 
 export function DriverBonusView() {
-  const [family, setFamily] = useState<BonusFamily>("tier");
+  const [family, setFamily] = useState<Tab>("tier");
   return (
     <>
       <PageHeader title="Primes chauffeurs">
@@ -23,11 +25,17 @@ export function DriverBonusView() {
           <Segmented label="Famille de primes" options={FAMILIES} value={family} onChange={setFamily} />
         </div>
       </PageHeader>
-      <Configs key={family} family={family} />
-      {LEDGER_OF[family].map((l) => (
-        <Ledger key={l} ledger={l} />
-      ))}
-      <RunConfig />
+      {family === "challenges" ? (
+        <ChallengesPanel />
+      ) : (
+        <>
+          <Configs key={family} family={family} />
+          {LEDGER_OF[family].map((l) => (
+            <Ledger key={l} ledger={l} />
+          ))}
+          <RunConfig />
+        </>
+      )}
       <Note>La création et la modification des paliers, taux et seuils arrivent dans un prochain écran ; activation, désactivation et suppression sont disponibles ici.</Note>
     </>
   );

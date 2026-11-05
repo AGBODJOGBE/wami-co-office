@@ -1,5 +1,5 @@
 import { fail, guard } from "@/shared/lib/result";
-import { blockBlocker, unblockBlocker, type Wallet } from "../domain/wallet";
+import { adjustmentBlocker, blockBlocker, unblockBlocker, type Wallet } from "../domain/wallet";
 import type { WalletRepository } from "../domain/wallet.repository";
 import { HttpWalletRepository } from "./wallet.http-repository";
 
@@ -11,6 +11,11 @@ export function createWalletUseCases(repo: WalletRepository) {
       const blocker = blockBlocker(w, reason);
       if (blocker) return fail("validation", blocker);
       return guard(() => repo.blockWithdrawals(w.id, reason.trim()));
+    },
+    adjust: async (w: Wallet, amount: number, reason: string, isSuperAdmin: boolean) => {
+      const blocker = adjustmentBlocker(w, amount, reason, isSuperAdmin);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.adjust(w.id, amount, reason.trim()));
     },
     unblockWithdrawals: async (w: Wallet) => {
       const blocker = unblockBlocker(w);

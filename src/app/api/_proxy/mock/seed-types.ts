@@ -67,3 +67,5 @@ export type { Commission, Tariff, Zone } from "@/features/pricing-zones";
 export type { AuditEntry, Member } from "@/features/rbac";
 export type { PlatformSettings } from "@/features/settings";
 export type { SearchHit } from "@/features/search";
+
+export type { Challenge } from "@/features/driver-bonus/domain/challenge";

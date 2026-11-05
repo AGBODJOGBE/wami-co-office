@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "@/shared/auth/session.store";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
 import { dateTime, fcfa } from "@/shared/lib/format";
@@ -68,6 +69,9 @@ function WalletPanel({ wallet, onChange }: { wallet: Wallet; onChange: (w: Walle
   const canWrite = useCanWrite("wallet");
   const { busy, run } = useAction();
   const [reason, setReason] = useState("");
+  const [amount, setAmount] = useState("");
+  const [adjReason, setAdjReason] = useState("");
+  const isSuperAdmin = useSession((s) => s.user?.role === "superAdmin");
   const movements = useResource(() => walletUseCases.movements(wallet.id), wallet.id);
 
   return (
@@ -127,6 +131,28 @@ function WalletPanel({ wallet, onChange }: { wallet: Wallet; onChange: (w: Walle
           </Button>
         </>
       )}
+      <b className="mt-3 text-sm">Ajustement manuel (données fictives)</b>
+      <Note>Route backend manquante : POST /api/admin/wallets/:id/adjustments. Fonctionne seulement sur le faux backend.</Note>
+      <Field label="Montant (F)" hint="Positif pour créditer, négatif pour débiter.">
+        <input className={fieldClass} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d-]/g, ""))} />
+      </Field>
+      <Field label="Motif">
+        <input className={fieldClass} value={adjReason} onChange={(e) => setAdjReason(e.target.value)} />
+      </Field>
+      <Button
+        disabled={!canWrite}
+        busy={busy}
+        onClick={async () => {
+          const r = await run(() => walletUseCases.adjust(wallet, Number(amount), adjReason, isSuperAdmin), "Ajustement enregistré (faux backend).");
+          if (r !== undefined) {
+            setAmount("");
+            setAdjReason("");
+            movements.reload();
+          }
+        }}
+      >
+        Enregistrer l’ajustement
+      </Button>
     </Card>
   );
 }

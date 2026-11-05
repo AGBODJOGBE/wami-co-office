@@ -58,4 +58,7 @@ export class HttpAffiliateRepository implements AffiliateRepository {
   async setCommissionRate(id: string, rate: number | null) {
     await http.patch(API.affiliate.commissionRate(id), { commissionRate: rate });
   }
+  async pay(id: string, amount: number) {
+    await http.post(API.affiliate.pay(id), { amount });
+  }
 }

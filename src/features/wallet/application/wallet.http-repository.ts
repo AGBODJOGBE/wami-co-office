@@ -62,4 +62,7 @@ export class HttpWalletRepository implements WalletRepository {
   async unblockWithdrawals(walletId: string) {
     await http.patch(API.wallet.unblockWithdrawals(walletId));
   }
+  async adjust(walletId: string, amount: number, reason: string) {
+    await http.post(API.wallet.adjust(walletId), { amount, reason });
+  }
 }

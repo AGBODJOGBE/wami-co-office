@@ -10,7 +10,7 @@ import { Dialog } from "@/shared/ui/dialog";
 import { Button, Card, Field, fieldClass, Kpi, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { affiliateUseCases } from "../application/affiliate.use-cases";
-import { AFFILIATE_STATUS_LABELS, type Affiliate, type SuspensionMode } from "../domain/affiliate";
+import { AFFILIATE_STATUS_LABELS, MIN_AFFILIATE_PAYOUT, type Affiliate, type SuspensionMode } from "../domain/affiliate";
 
 const TONE: Record<Affiliate["status"], Tone> = { active: "ok", suspended: "warn", closed: "bad" };
 type Action = "suspend" | "close" | "reopen" | "rate";
@@ -50,6 +50,20 @@ export function AffiliateView() {
                     header: "",
                     render: (a) => (
                       <span className="flex gap-1.5">
+                        {a.outstanding >= MIN_AFFILIATE_PAYOUT ? (
+                          <Button
+                            size="sm"
+                            tone="primary"
+                            disabled={!canWrite || busy}
+                            title="Route backend manquante : faux backend"
+                            onClick={async () => {
+                              const r = await run(() => affiliateUseCases.pay(a, a.outstanding), `${fcfa(a.outstanding)} versés à ${a.name} (faux backend).`);
+                              if (r !== undefined) list.reload();
+                            }}
+                          >
+                            Verser {fcfa(a.outstanding)}
+                          </Button>
+                        ) : null}
                         <Button size="sm" disabled={!canWrite || a.status === "closed"} onClick={() => setDialog({ affiliate: a, action: "rate" })}>
                           Taux
                         </Button>
