@@ -136,3 +136,7 @@ declareReal("GET", "/v1/admin/pricing/zones");
 declareReal("POST", "/v1/admin/pricing/zones");
 declareReal("PATCH", "/v1/admin/pricing/zones/:id");
 declareReal("DELETE", "/v1/admin/pricing/zones/:id");
+
+// Parrainage : création et édition des configurations
+declareReal("POST", "/v1/admin/referrals/config");
+declareReal("PUT", "/v1/admin/referrals/config/:id");

@@ -1,3 +1,5 @@
+import type { ConfigDraft } from "./config-draft";
+
 /** Parrainage : un utilisateur invite un proche, les deux sont récompensés selon la configuration active. */
 
 export type ReferralStatus = "pending" | "validated" | "expired";
@@ -41,6 +43,8 @@ export interface ReferralConfig {
   expirationDays: number | null;
   rules: RewardRule[];
   activatedAt: string | null;
+  /** Contenu complet, pour l'édition. */
+  draft: ConfigDraft;
 }
 
 export function validateBlocker(r: Referral): string | null {

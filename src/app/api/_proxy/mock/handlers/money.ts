@@ -33,8 +33,9 @@ const referralConfigs: Array<{
   name: string;
   description: string | null;
   isActive: boolean;
-  rewardMatrix: Array<{ referrerType: string; referredType: string; rewardMode: "FIXED" | "PERCENTAGE"; referrerAmount: number; referredAmount: number }>;
-  validationConditions: { expirationDays: number | null };
+  rewardMatrix: Array<{ referrerType: string; referredType: string; rewardMode: "FIXED" | "PERCENTAGE"; referrerAmount: number; referredAmount: number; referrerCap?: number | null; referredCap?: number | null }>;
+  limits?: { perType: Array<{ referredType: string; maxPerMonth: number; maxPerDay: number }>; maxReferralsPerDayGlobal: number | null };
+  validationConditions: { expirationDays: number | null; perType?: Array<{ referredType: string; actionsRequired: number; actionType: string }> };
   activatedAt: string | null;
 }> = [
   { id: "rc-1", name: "Lancement passagers", description: "Parrainage passager → passager", isActive: true, rewardMatrix: [{ referrerType: "PASSENGER", referredType: "PASSENGER", rewardMode: "FIXED", referrerAmount: 1000, referredAmount: 500 }], validationConditions: { expirationDays: 30 }, activatedAt: new Date().toISOString() },
@@ -428,6 +429,21 @@ export const moneyRoutes: MockRoute[] = [
       return { id: c.id, isActive: c.isActive };
     }),
   ),
+  route("POST", `${A}/referrals/config`, "referrals", ({ body, user }) => {
+    const name = str(body, "name");
+    if (!name || !Array.isArray(body.rewardMatrix) || body.rewardMatrix.length !== 25) throw invalid("Reward matrix is incomplete. Missing combination(s).");
+    const c = { id: newId("rc"), name, description: typeof body.description === "string" ? body.description : null, isActive: false, rewardMatrix: body.rewardMatrix as never, limits: body.limits as never, validationConditions: body.validationConditions as never, activatedAt: null };
+    referralConfigs.push(c);
+    audit(user, "Argent", `Configuration de parrainage « ${name} » créée`);
+    return { id: c.id };
+  }),
+  route("PUT", `${A}/referrals/config/:id`, "referrals", ({ params, body, user }) => {
+    const c = find(referralConfigs, (x) => x.id === params.id);
+    if (Array.isArray(body.rewardMatrix) && body.rewardMatrix.length !== 25) throw invalid("Reward matrix is incomplete. Missing combination(s).");
+    Object.assign(c, { name: str(body, "name") || c.name, description: typeof body.description === "string" ? body.description : null, rewardMatrix: body.rewardMatrix ?? c.rewardMatrix, limits: body.limits ?? c.limits, validationConditions: body.validationConditions ?? c.validationConditions });
+    audit(user, "Argent", `Configuration de parrainage « ${c.name} » modifiée`);
+    return { id: c.id };
+  }),
   route("DELETE", `${A}/referrals/config/:id`, "referrals", ({ params, user }) => {
     const c = find(referralConfigs, (x) => x.id === params.id);
     if (c.isActive) throw invalid("Cannot delete an active configuration");

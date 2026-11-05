@@ -9,6 +9,7 @@ import { DataTable } from "@/shared/ui/data-table";
 import { MissingRoutes } from "@/shared/ui/missing-routes";
 import { Button, Card, CardHeader, Field, fieldClass, Kpi, Note, PageHeader, Tag, Toggle, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
+import { ConfigDialog } from "./config-dialog";
 import { referralsUseCases } from "../application/referrals.use-cases";
 import { REFERRAL_STATUS_LABELS, type Referral, type ReferralConfig, type ReferralProgram, type ReferralStatus } from "../domain/referral";
 
@@ -20,6 +21,7 @@ export function ReferralsView() {
   const list = useResource(() => referralsUseCases.list(), "referrals");
   const program = useResource(() => referralsUseCases.program(), "program");
   const canWrite = useCanWrite("referrals");
+  const [editing, setEditing] = useState<ReferralConfig | "new" | null>(null);
   const { busy, run } = useAction();
 
   const refresh = () => {
@@ -43,7 +45,11 @@ export function ReferralsView() {
       </ResourceView>
       <div className="grid gap-3.5 xl:grid-cols-[400px_minmax(0,1fr)]">
         <Card className="overflow-hidden">
-          <CardHeader title="Configurations" />
+          <CardHeader title="Configurations">
+            <Button size="sm" tone="primary" disabled={!canWrite} onClick={() => setEditing("new")}>
+              Nouvelle
+            </Button>
+          </CardHeader>
           <ResourceView state={configs} onRetry={configs.reload}>
             {(rows) => (
               <DataTable<ReferralConfig>
@@ -60,6 +66,9 @@ export function ReferralsView() {
                     render: (c) => (
                       <span className="flex gap-1.5">
                         {c.active ? <Tag tone="ok">Active</Tag> : null}
+                        <Button size="sm" disabled={!canWrite} onClick={() => setEditing(c)}>
+                          Modifier
+                        </Button>
                         <Button
                           size="sm"
                           disabled={!canWrite || busy}
@@ -156,7 +165,16 @@ export function ReferralsView() {
         {(p) => <ProgramCard initial={p} canWrite={canWrite} onSaved={(np) => program.mutate(() => np)} />}
       </ResourceView>
       <MissingRoutes area="referralProgram" />
-      <Note>La création et la modification d’une configuration (matrice de récompenses, limites, conditions) arrivent dans un prochain écran ; l’activation est déjà possible ici.</Note>
+      {editing ? (
+        <ConfigDialog
+          config={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null);
+            configs.reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }
