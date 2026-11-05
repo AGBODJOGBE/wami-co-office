@@ -85,3 +85,36 @@ export function can(role: Role | undefined, module: Module, need: Exclude<Access
   const a = accessOf(role, module);
   return need === "read" ? a !== "none" : a === "write";
 }
+
+/**
+ * Avec le vrai backend, les droits viennent de permissions (`ride.view_all`…),
+ * pas des 4 rôles ci-dessus. Pour chaque module : permissions qui donnent la lecture
+ * et l'écriture. Un module absent de cette table n'a pas d'équivalent backend
+ * (il tourne sur le faux backend) : visible par tout agent, écriture réservée
+ * à qui peut créer des admins.
+ */
+const PERMISSION_MAP: Partial<Record<Module, { read: string[]; write: string[] }>> = {
+  rides: { read: ["ride.view_all"], write: ["ride.update_status"] },
+  drivers: { read: ["driver.view_all"], write: ["driver.suspend", "driver.reactivate", "driver.update_info"] },
+  contracts: { read: ["contract.view_all"], write: ["contract.create", "contract.installment.manual_payment", "contract.suspend"] },
+  wallet: { read: ["wallet.view_all"], write: ["wallet.block_withdrawals", "wallet.withdrawal.approve", "wallet.grant.request"] },
+  "promo-codes": { read: ["promo.view", "promo.manage"], write: ["promo.manage"] },
+  affiliate: { read: ["affiliate.view", "affiliate.manage"], write: ["affiliate.manage"] },
+  "driver-bonus": { read: ["driver.view_all"], write: ["driver.welcome_bonus.manage"] },
+  "pricing-zones": { read: ["pricing.grid.configure"], write: ["pricing.grid.configure"] },
+  rbac: { read: ["admin.view_all"], write: ["admin.create", "admin.update_role"] },
+};
+
+export function canWithPermissions(permissions: string[], module: Module, need: Exclude<Access, "none"> = "read"): boolean {
+  const entry = PERMISSION_MAP[module];
+  if (!entry) return need === "read" || permissions.includes("admin.create");
+  return entry[need].some((p) => permissions.includes(p));
+}
+
+/** Rôle interne le plus proche, pour les écrans encore sur le faux backend. */
+export function roleFromPermissions(permissions: string[]): Role {
+  if (permissions.includes("admin.create")) return "superAdmin";
+  if (permissions.includes("wallet.withdrawal.approve")) return "finance";
+  if (permissions.includes("ride.update_status")) return "operations";
+  return "support";
+}

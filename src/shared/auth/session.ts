@@ -6,6 +6,10 @@ export interface SessionUser {
   name: string;
   email: string;
   role: Role;
+  /** Rôle tel que nommé par le backend (affichage). */
+  roleName?: string;
+  /** Permissions effectives renvoyées par le backend (`wallet.view_all`…). Absent en démonstration. */
+  permissions?: string[];
 }
 
 /** Nom du cookie httpOnly posé par `/api/auth/login`. */

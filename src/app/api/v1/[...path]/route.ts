@@ -1,13 +1,16 @@
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/shared/auth/session";
+import { isRealRoute, toBackendPath } from "../../_proxy/backend/routes";
+import "../../_proxy/backend/declared";
 import { forwardToBackend } from "../../_proxy/forward";
 import { handleMock } from "../../_proxy/mock";
 import { decodeSession } from "../../_proxy/session";
 
 /**
  * Point d'entrée unique des appels du back-office : `/api/v1/...`.
- * - `WAMI_API_URL` défini → relais vers le backend WAMI (app/api/_proxy/forward.ts).
- * - sinon → faux backend en mémoire (app/api/_proxy/mock), pour développer sans serveur.
+ * - `WAMI_API_URL` défini et route déclarée réelle (app/api/_proxy/backend) → relais vers le backend WAMI.
+ * - sinon → faux backend en mémoire (app/api/_proxy/mock) : développement sans serveur, et modules
+ *   que le backend n'expose pas encore.
  */
 async function handle(request: NextRequest, ctx: RouteContext<"/api/v1/[...path]">): Promise<Response> {
   const session = decodeSession(request.cookies.get(SESSION_COOKIE)?.value);
@@ -16,8 +19,8 @@ async function handle(request: NextRequest, ctx: RouteContext<"/api/v1/[...path]
   const { path } = await ctx.params;
   const backendPath = `/v1/${path.join("/")}`;
 
-  if (process.env.WAMI_API_URL) {
-    return forwardToBackend(request, backendPath, request.nextUrl.search, session.token);
+  if (process.env.WAMI_API_URL && isRealRoute(request.method, backendPath)) {
+    return forwardToBackend(request, toBackendPath(backendPath), request.nextUrl.search, session.token);
   }
 
   let body: Record<string, unknown> = {};
