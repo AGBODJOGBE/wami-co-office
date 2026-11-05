@@ -7,6 +7,16 @@ import type { Member, PlatformSettings, Tariff } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Profils et zones de tarification de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockProfiles: Array<{ profileId: string; serviceKey: string; vehicleType: string | null; name: string; description: string | null; strategy: string; isActive: boolean; version: number; activatedAt: string | null; updatedAt: string; commissionRate: number; driverShareRate: number; components: Array<Record<string, unknown>> }> = [
+  { profileId: "pp-1", serviceKey: "RIDE", vehicleType: "MOTO", name: "Course moto", description: "Tarif standard moto", strategy: "PER_KM", isActive: true, version: 3, activatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), commissionRate: 0.15, driverShareRate: 0.85, components: [{ type: "FLAT_FEE", key: "base", label: "Prise en charge", value: 300 }, { type: "PER_KM_TIER", key: "km", label: "Prix au km", tiers: [{}, {}] }, { type: "WAITING_FEE", key: "wait", label: "Attente", value: 25, freeUnits: 5 }, { type: "MINIMUM_FARE", key: "min", label: "Course minimum", minimum: 500 }] },
+  { profileId: "pp-2", serviceKey: "RIDE", vehicleType: "MOTO", name: "Course moto (brouillon)", description: null, strategy: "PER_KM", isActive: false, version: 1, activatedAt: null, updatedAt: new Date().toISOString(), commissionRate: 0.12, driverShareRate: 0.88, components: [{ type: "PER_MINUTE", key: "min", label: "Prix à la minute", value: 20 }] },
+];
+const mockPricingZones: Array<{ zoneId: string; serviceKey: string; code: string; name: string; type: string; isActive: boolean }> = [
+  { zoneId: "pz-1", serviceKey: "RIDE", code: "COTONOU", name: "Cotonou", type: "CITY", isActive: true },
+  { zoneId: "pz-2", serviceKey: "RIDE", code: "CALAVI", name: "Abomey-Calavi", type: "CITY", isActive: false },
+];
+
 const asRole = (v: unknown): Role => {
   const r = ROLES.find((x) => x === v);
   if (!r) throw invalid("Rôle inconnu.");
@@ -16,7 +26,46 @@ const asRole = (v: unknown): Role => {
 /** Tarifs et zones, rôles et journal, paramètres. */
 export const settingsRoutes: MockRoute[] = [
   // ── Tarifs et zones ──
-  route("GET", `${A}/pricing/zones`, "pricing-zones", () => db().zones),
+  route("GET", `${A}/pricing/zone-areas`, "pricing-zones", () => db().zones),
+  // Profils et zones de tarification (contrat du backend WAMI : /api/admin/pricing/profiles|zones).
+  route("GET", `${A}/pricing/profiles`, "pricing-profiles", () => mockProfiles.map((p) => ({ profileId: p.profileId, serviceKey: p.serviceKey, vehicleType: p.vehicleType, name: p.name, strategy: p.strategy, isActive: p.isActive, version: p.version, activatedAt: p.activatedAt, updatedAt: p.updatedAt }))),
+  route("GET", `${A}/pricing/profiles/:id`, "pricing-profiles", ({ params }) => find(mockProfiles, (p) => p.profileId === params.id)),
+  ...(["activate", "deactivate"] as const).map((action) =>
+    route("POST", `${A}/pricing/profiles/:id/${action}`, "pricing-profiles", ({ params, user }) => {
+      const p = find(mockProfiles, (x) => x.profileId === params.id);
+      for (const x of mockProfiles) if (x.serviceKey === p.serviceKey && x.vehicleType === p.vehicleType) x.isActive = action === "activate" ? x.profileId === p.profileId : x.isActive && x.profileId !== p.profileId;
+      audit(user, "Réglages", `Profil tarifaire « ${p.name} » : ${action}`);
+      return { profileId: p.profileId, isActive: p.isActive };
+    }),
+  ),
+  route("DELETE", `${A}/pricing/profiles/:id`, "pricing-profiles", ({ params, user }) => {
+    const p = find(mockProfiles, (x) => x.profileId === params.id);
+    if (p.isActive) throw invalid("Cannot delete an active pricing profile");
+    mockProfiles.splice(mockProfiles.indexOf(p), 1);
+    audit(user, "Réglages", `Profil tarifaire « ${p.name} » supprimé`);
+    return { profileId: p.profileId };
+  }),
+  route("GET", `${A}/pricing/zones`, "pricing-profiles", () => mockPricingZones),
+  route("POST", `${A}/pricing/zones`, "pricing-profiles", ({ body, user }) => {
+    const code = str(body, "code").toUpperCase();
+    if (mockPricingZones.some((z) => z.code === code && z.serviceKey === str(body, "serviceKey"))) throw invalid("Zone code already exists");
+    const z = { zoneId: newId("pz"), serviceKey: str(body, "serviceKey"), code, name: str(body, "name"), type: str(body, "type"), isActive: true };
+    mockPricingZones.push(z);
+    audit(user, "Réglages", `Zone de tarification ${code} créée`);
+    return { zoneId: z.zoneId };
+  }),
+  route("PATCH", `${A}/pricing/zones/:id`, "pricing-profiles", ({ params, body, user }) => {
+    const z = find(mockPricingZones, (x) => x.zoneId === params.id);
+    if (typeof body.isActive === "boolean") z.isActive = body.isActive;
+    audit(user, "Réglages", `Zone ${z.code} : ${z.isActive ? "activée" : "désactivée"}`);
+    return z;
+  }),
+  route("DELETE", `${A}/pricing/zones/:id`, "pricing-profiles", ({ params, user }) => {
+    const z = find(mockPricingZones, (x) => x.zoneId === params.id);
+    mockPricingZones.splice(mockPricingZones.indexOf(z), 1);
+    audit(user, "Réglages", `Zone ${z.code} supprimée`);
+    return { zoneId: z.zoneId };
+  }),
   route("GET", `${A}/pricing/zones/:zoneId/tariffs`, "pricing-zones", ({ params }) => db().tariffs[params.zoneId!] ?? []),
   route("PUT", `${A}/pricing/zones/:zoneId/tariffs/:service`, "pricing-zones", ({ params, body, user }) => {
     const list = db().tariffs[params.zoneId!];

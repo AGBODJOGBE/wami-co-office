@@ -35,6 +35,16 @@ export const API = {
   payments: {
     intents: `${A}/payments/intents`,
   },
+  pricingAdmin: {
+    profiles: `${A}/pricing/profiles`,
+    profile: (id: string) => `${A}/pricing/profiles/${id}`,
+    activateProfile: (id: string) => `${A}/pricing/profiles/${id}/activate`,
+    deactivateProfile: (id: string) => `${A}/pricing/profiles/${id}/deactivate`,
+    zones: `${A}/pricing/zones`,
+    zone: (id: string) => `${A}/pricing/zones/${id}`,
+    grid: `${A}/pricing-grid`,
+    activeGrid: `${A}/pricing-grid/active`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,
@@ -205,7 +215,8 @@ export const API = {
     campaigns: `${A}/notifications/campaigns`,
   },
   pricing: {
-    zones: `${A}/pricing/zones`,
+    // Zones dessinées sur la carte (polygone, couleur) : absentes du backend, voir missing-routes.ts.
+    zones: `${A}/pricing/zone-areas`,
     tariffs: (zoneId: string) => `${A}/pricing/zones/${zoneId}/tariffs`,
     tariff: (zoneId: string, service: string) => `${A}/pricing/zones/${zoneId}/tariffs/${service}`,
     commissions: `${A}/pricing/commissions`,

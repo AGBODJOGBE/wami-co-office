@@ -60,7 +60,7 @@ export const MISSING_ROUTES = {
   ],
   notifications: [r("GET", "/notifications/campaigns", "Campagnes push / SMS"), r("POST", "/notifications/campaigns", "Envoyer ou programmer une campagne")],
   pricingZones: [
-    r("GET", "/pricing/zones", "Zones avec polygone, couleur et statut (le backend n'a que code, nom et type)"),
+    r("GET", "/pricing/zone-areas", "Zones de la carte avec polygone, couleur et statut (le backend n'a que code, nom et type : /pricing/zones)"),
     r("GET", "/pricing/zones/:zoneId/tariffs", "Tarifs d'une zone par service"),
     r("PUT", "/pricing/zones/:zoneId/tariffs/:service", "Modifier un tarif"),
     r("GET", "/pricing/commissions", "Commissions par activité"),

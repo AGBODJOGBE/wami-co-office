@@ -125,3 +125,14 @@ declareReal("GET", "/v1/admin/rides/:id/telemetry");
 declareReal("GET", "/v1/admin/rides/:id/matching");
 declareReal("GET", "/v1/admin/rides/:id/track");
 declareReal("GET", "/v1/admin/rides/:id/guarantee-settlement");
+
+// Profils tarifaires et zones de tarification (la carte des zones, /pricing/zone-areas, reste en mock)
+declareReal("GET", "/v1/admin/pricing/profiles");
+declareReal("GET", "/v1/admin/pricing/profiles/:id");
+declareReal("POST", "/v1/admin/pricing/profiles/:id/activate");
+declareReal("POST", "/v1/admin/pricing/profiles/:id/deactivate");
+declareReal("DELETE", "/v1/admin/pricing/profiles/:id");
+declareReal("GET", "/v1/admin/pricing/zones");
+declareReal("POST", "/v1/admin/pricing/zones");
+declareReal("PATCH", "/v1/admin/pricing/zones/:id");
+declareReal("DELETE", "/v1/admin/pricing/zones/:id");

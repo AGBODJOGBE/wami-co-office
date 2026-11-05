@@ -62,6 +62,7 @@ export const NAVIGATION: NavGroup[] = [
     label: "Réglages",
     items: [
       { module: "pricing-zones", href: "/pricing-zones", label: "Tarifs et zones" },
+      { module: "pricing-profiles", href: "/pricing-profiles", label: "Profils tarifaires" },
       { module: "wallet-config", href: "/wallet-config", label: "Règles des portefeuilles" },
       { module: "vtc", href: "/vtc", label: "Offres VTC" },
       { module: "parcel-types", href: "/parcel-types", label: "Types de colis" },
