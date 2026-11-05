@@ -150,16 +150,46 @@ export const moneyRoutes: MockRoute[] = [
   }),
 
   // ── Affiliation ──
-  route("GET", `${A}/affiliates`, "affiliate", () => db().affiliates),
-  route("POST", `${A}/affiliates/:id/payouts`, "affiliate", ({ params, body, user }) => {
+  // Même contrat que le backend WAMI : /api/admin/affiliates (le versement passe par les retraits).
+  route("GET", `${A}/affiliates`, "affiliate", () =>
+    db().affiliates.map((a) => {
+      const accrued = a.activations * a.ratePerActivation;
+      return {
+        affiliateId: a.id,
+        name: a.name,
+        phoneNumber: a.phone,
+        socialNetwork: a.kind === "agency" ? "Agence" : "Instagram",
+        audienceSize: null,
+        status: a.status === "active" ? "ACTIVE" : a.status === "suspended" ? "SUSPENDED" : "CLOSED",
+        commissionRate: a.commissionRate ?? null,
+        effectiveCommissionRate: a.commissionRate ?? 0.1,
+        totalPayable: accrued,
+        totalPaid: a.paid,
+        outstandingPayable: Math.max(0, accrued - a.paid),
+        codes: [{ code: a.code, currentUsages: a.activations, isCurrentlyUsable: a.status === "active" }],
+      };
+    }),
+  ),
+  ...(["suspend", "reactivate", "close", "reopen"] as const).map((action) =>
+    route("POST", `${A}/affiliates/:id/${action}`, "affiliate", ({ params, body, user }) => {
+      const a = find(db().affiliates, (x) => x.id === params.id);
+      if (action === "suspend" && body.mode !== "PAUSE" && body.mode !== "SANCTION") throw invalid("mode doit valoir 'PAUSE' ou 'SANCTION'");
+      if ((action === "close" || action === "reopen" || (action === "suspend" && body.mode === "SANCTION")) && !str(body, "reason").trim()) throw invalid("reason est obligatoire");
+      const status = action === "suspend" ? "suspended" : action === "close" ? "closed" : "active";
+      audit(user, "Argent", `Affilié ${a.name} : ${action}`);
+      replace(db().affiliates, (x) => x.id === a.id, { ...a, status });
+      return { affiliateId: a.id, status: status.toUpperCase() };
+    }),
+  ),
+  route("PATCH", `${A}/affiliates/:id/commission-rate`, "affiliate", ({ params, body, user }) => {
     const a = find(db().affiliates, (x) => x.id === params.id);
-    const amount = num(body, "amount");
-    if (!(amount > 0) || amount > a.activations * a.ratePerActivation - a.paid) throw invalid("Montant supérieur au dû.");
-    audit(user, "Argent", `A versé ${amount} F à l’affilié ${a.name}`);
-    return replace(db().affiliates, (x) => x.id === a.id, { ...a, paid: a.paid + amount });
+    const rate = typeof body.commissionRate === "number" ? body.commissionRate : null;
+    if (rate !== null && (rate < 0 || rate > 1)) throw invalid("commissionRate doit être entre 0 et 1");
+    audit(user, "Argent", `Taux de commission de ${a.name} : ${rate === null ? "défaut" : rate}`);
+    replace(db().affiliates, (x) => x.id === a.id, { ...a, commissionRate: rate });
+    return { affiliateId: a.id, commissionRate: rate };
   }),
 
-  // ── Parrainage ──
   route("GET", `${A}/referrals/program`, "referrals", () => db().referralProgram),
   route("PUT", `${A}/referrals/program`, "referrals", ({ body, user }) => {
     db().referralProgram = body as unknown as ReferralProgram;

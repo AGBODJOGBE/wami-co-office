@@ -37,3 +37,12 @@ declareReal("POST", "/v1/admin/promo-codes");
 declareReal("PATCH", "/v1/admin/promo-codes/:id/toggle");
 declareReal("PATCH", "/v1/admin/promo-codes/:id/affiliate");
 declareReal("PATCH", "/v1/admin/promo-codes/:id/margin-residual");
+
+// Affiliation (la route /:id/payouts du front n'existe pas : le versement passe par les retraits)
+declareReal("GET", "/v1/admin/affiliates");
+declareReal("GET", "/v1/admin/affiliates/:id");
+declareReal("PATCH", "/v1/admin/affiliates/:id/commission-rate");
+declareReal("POST", "/v1/admin/affiliates/:id/suspend");
+declareReal("POST", "/v1/admin/affiliates/:id/reactivate");
+declareReal("POST", "/v1/admin/affiliates/:id/close");
+declareReal("POST", "/v1/admin/affiliates/:id/reopen");

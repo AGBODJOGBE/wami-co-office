@@ -1,33 +1,64 @@
 /**
- * Affiliation : apporteurs d'affaires (personnes ou agences) rémunérés pour
- * chaque partenaire recruté qui devient actif.
+ * Affiliation : influenceurs et apporteurs dont le code promo génère une commission.
+ * Les commissions s'accumulent dans le sous-solde AFFILIATE du portefeuille ; le versement
+ * passe par une demande de retrait, validée dans l'écran Portefeuilles.
  */
+
+export type AffiliateStatus = "active" | "suspended" | "closed";
+
+export const AFFILIATE_STATUS_LABELS: Record<AffiliateStatus, string> = { active: "Actif", suspended: "Suspendu", closed: "Clôturé" };
+
+export interface AffiliateCode {
+  code: string;
+  usages: number;
+  usable: boolean;
+}
 
 export interface Affiliate {
   id: string;
   name: string;
-  kind: "individual" | "agency";
   phone: string;
-  code: string;
-  /** Partenaires recrutés devenus actifs. */
-  activations: number;
-  /** Partenaires recrutés encore en vérification. */
-  pending: number;
-  ratePerActivation: number;
+  socialNetwork: string;
+  audienceSize: number | null;
+  status: AffiliateStatus;
+  /** Taux négocié ; null = taux par défaut de la plateforme. */
+  commissionRate: number | null;
+  effectiveCommissionRate: number;
+  /** Commissions gagnées au total. */
+  accrued: number;
   paid: number;
-  status: "active" | "suspended";
+  /** Reste à verser. */
+  outstanding: number;
+  codes: AffiliateCode[];
 }
 
-export const earned = (a: Affiliate) => a.activations * a.ratePerActivation;
-export const due = (a: Affiliate) => Math.max(0, earned(a) - a.paid);
+export type SuspensionMode = "pause" | "sanction";
 
-/** Montant minimum d'un versement à un affilié (à valider). */
-export const MIN_AFFILIATE_PAYOUT = 5000;
+export function suspendBlocker(a: Affiliate, mode: SuspensionMode, reason: string): string | null {
+  if (a.status !== "active") return "Seul un affilié actif peut être suspendu.";
+  if (mode === "sanction" && reason.trim().length < 5) return "Motif obligatoire pour une sanction.";
+  return null;
+}
 
-export function payoutBlocker(a: Affiliate, amount: number): string | null {
-  if (a.status !== "active") return "Affilié suspendu.";
-  if (!Number.isInteger(amount) || amount <= 0) return "Montant invalide.";
-  if (amount > due(a)) return "Le montant dépasse ce qui est dû.";
-  if (amount < MIN_AFFILIATE_PAYOUT) return `Versement minimum : ${MIN_AFFILIATE_PAYOUT} F.`;
+export function reactivateBlocker(a: Affiliate): string | null {
+  return a.status === "suspended" ? null : "Seul un affilié suspendu peut être réactivé.";
+}
+
+export function closeBlocker(a: Affiliate, reason: string): string | null {
+  if (a.status === "closed") return "Profil déjà clôturé.";
+  if (reason.trim().length < 5) return "Motif de clôture obligatoire.";
+  return null;
+}
+
+export function reopenBlocker(a: Affiliate, reason: string): string | null {
+  if (a.status !== "closed") return "Seul un profil clôturé peut être rouvert.";
+  if (reason.trim().length < 5) return "Motif de réouverture obligatoire.";
+  return null;
+}
+
+/** Taux de commission : fraction entre 0 et 1, ou null pour revenir au taux par défaut. */
+export function rateBlocker(rate: number | null): string | null {
+  if (rate === null) return null;
+  if (!(rate >= 0 && rate <= 1)) return "Le taux doit être compris entre 0 % et 100 %.";
   return null;
 }

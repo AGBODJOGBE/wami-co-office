@@ -1,31 +1,37 @@
 "use client";
 
+import { useState } from "react";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
-import { fcfa } from "@/shared/lib/format";
+import { fcfa, percent } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
-import { Button, Card, Kpi, Note, PageHeader, Tag } from "@/shared/ui/primitives";
+import { Dialog } from "@/shared/ui/dialog";
+import { Button, Card, Field, fieldClass, Kpi, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { affiliateUseCases } from "../application/affiliate.use-cases";
-import { MIN_AFFILIATE_PAYOUT, due, earned, type Affiliate } from "../domain/affiliate";
+import { AFFILIATE_STATUS_LABELS, type Affiliate, type SuspensionMode } from "../domain/affiliate";
+
+const TONE: Record<Affiliate["status"], Tone> = { active: "ok", suspended: "warn", closed: "bad" };
+type Action = "suspend" | "close" | "reopen" | "rate";
 
 export function AffiliateView() {
   const list = useResource(() => affiliateUseCases.list(), "affiliates");
   const canWrite = useCanWrite("affiliate");
+  const [dialog, setDialog] = useState<{ affiliate: Affiliate; action: Action } | null>(null);
   const { busy, run } = useAction();
 
   return (
     <>
-      <PageHeader title="Affiliation (apporteurs de partenaires)" />
+      <PageHeader title="Affiliation" />
       <ResourceView state={list} onRetry={list.reload}>
         {(rows) => (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Kpi label="Affiliés actifs" value={String(rows.filter((a) => a.status === "active").length)} />
-              <Kpi label="Partenaires apportés" value={String(rows.reduce((s, a) => s + a.activations, 0))} hint={`${rows.reduce((s, a) => s + a.pending, 0)} en vérification`} />
-              <Kpi label="Commissions gagnées" value={fcfa(rows.reduce((s, a) => s + earned(a), 0))} />
-              <Kpi label="Reste à verser" value={fcfa(rows.reduce((s, a) => s + due(a), 0))} />
+              <Kpi label="Commissions gagnées" value={fcfa(rows.reduce((s, a) => s + a.accrued, 0))} />
+              <Kpi label="Déjà versé" value={fcfa(rows.reduce((s, a) => s + a.paid, 0))} />
+              <Kpi label="Reste à verser" value={fcfa(rows.reduce((s, a) => s + a.outstanding, 0))} />
             </div>
             <Card className="overflow-hidden">
               <DataTable<Affiliate>
@@ -33,30 +39,48 @@ export function AffiliateView() {
                 rowKey={(a) => a.id}
                 columns={[
                   { key: "name", header: "Affilié", render: (a) => <b>{a.name}</b> },
-                  { key: "kind", header: "Type", render: (a) => (a.kind === "agency" ? "Agence" : "Particulier") },
-                  { key: "code", header: "Code", render: (a) => a.code },
-                  { key: "act", header: "Activés", align: "right", render: (a) => `${a.activations} (+${a.pending})` },
-                  { key: "rate", header: "Par activation", align: "right", render: (a) => fcfa(a.ratePerActivation) },
-                  { key: "earned", header: "Gagné", align: "right", render: (a) => fcfa(earned(a)) },
-                  { key: "due", header: "Dû", align: "right", render: (a) => <b>{fcfa(due(a))}</b> },
-                  { key: "status", header: "", render: (a) => (a.status === "suspended" ? <Tag tone="bad">Suspendu</Tag> : null) },
+                  { key: "net", header: "Réseau", render: (a) => a.socialNetwork || "—" },
+                  { key: "codes", header: "Codes", render: (a) => a.codes.map((c) => `${c.code} (${c.usages})`).join(", ") || "—" },
+                  { key: "rate", header: "Taux", align: "right", render: (a) => percent(a.effectiveCommissionRate, 1) },
+                  { key: "accrued", header: "Gagné", align: "right", render: (a) => fcfa(a.accrued) },
+                  { key: "due", header: "À verser", align: "right", render: (a) => <b>{fcfa(a.outstanding)}</b> },
+                  { key: "status", header: "Statut", render: (a) => <Tag tone={TONE[a.status]}>{AFFILIATE_STATUS_LABELS[a.status]}</Tag> },
                   {
-                    key: "pay",
+                    key: "act",
                     header: "",
-                    render: (a) =>
-                      due(a) >= MIN_AFFILIATE_PAYOUT ? (
-                        <Button
-                          size="sm"
-                          tone="primary"
-                          disabled={!canWrite || busy}
-                          onClick={async () => {
-                            const r = await run(() => affiliateUseCases.pay(a, due(a)), `${fcfa(due(a))} versés à ${a.name}.`);
-                            if (r) list.mutate((l) => l.map((x) => (x.id === r.id ? r : x)));
-                          }}
-                        >
-                          Verser {fcfa(due(a))}
+                    render: (a) => (
+                      <span className="flex gap-1.5">
+                        <Button size="sm" disabled={!canWrite || a.status === "closed"} onClick={() => setDialog({ affiliate: a, action: "rate" })}>
+                          Taux
                         </Button>
-                      ) : null,
+                        {a.status === "active" ? (
+                          <Button size="sm" disabled={!canWrite} onClick={() => setDialog({ affiliate: a, action: "suspend" })}>
+                            Suspendre
+                          </Button>
+                        ) : null}
+                        {a.status === "suspended" ? (
+                          <Button
+                            size="sm"
+                            disabled={!canWrite || busy}
+                            onClick={async () => {
+                              const r = await run(() => affiliateUseCases.reactivate(a), "Affilié réactivé.");
+                              if (r !== undefined) list.reload();
+                            }}
+                          >
+                            Réactiver
+                          </Button>
+                        ) : null}
+                        {a.status === "closed" ? (
+                          <Button size="sm" disabled={!canWrite} onClick={() => setDialog({ affiliate: a, action: "reopen" })}>
+                            Rouvrir
+                          </Button>
+                        ) : (
+                          <Button size="sm" tone="danger" disabled={!canWrite} onClick={() => setDialog({ affiliate: a, action: "close" })}>
+                            Clôturer
+                          </Button>
+                        )}
+                      </span>
+                    ),
                   },
                 ]}
               />
@@ -64,7 +88,72 @@ export function AffiliateView() {
           </>
         )}
       </ResourceView>
-      <Note>Montant par activation, condition d’activité minimale du partenaire recruté (ex. 20 missions) et contrat d’apporteur : à valider.</Note>
+      <Note>Les commissions sont versées via une demande de retrait, à valider dans « Retraits ». Taux par défaut, conditions d’éligibilité et contrat d’apporteur : à valider.</Note>
+      {dialog ? (
+        <ActionDialog
+          {...dialog}
+          onClose={() => setDialog(null)}
+          onDone={() => {
+            setDialog(null);
+            list.reload();
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+const TITLES: Record<Action, string> = { suspend: "Suspendre", close: "Clôturer", reopen: "Rouvrir", rate: "Taux de commission" };
+
+function ActionDialog({ affiliate, action, onClose, onDone }: { affiliate: Affiliate; action: Action; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [mode, setMode] = useState<SuspensionMode>("pause");
+  const [rate, setRate] = useState(affiliate.commissionRate === null ? "" : String(Math.round(affiliate.commissionRate * 1000) / 10));
+  const { busy, run } = useAction();
+
+  const submit = async () => {
+    const r = await run(() => {
+      if (action === "suspend") return affiliateUseCases.suspend(affiliate, mode, reason);
+      if (action === "close") return affiliateUseCases.close(affiliate, reason);
+      if (action === "reopen") return affiliateUseCases.reopen(affiliate, reason);
+      return affiliateUseCases.setCommissionRate(affiliate, rate.trim() === "" ? null : Number(rate.replace(",", ".")) / 100);
+    }, "Enregistré.");
+    if (r !== undefined) onDone();
+  };
+
+  return (
+    <Dialog
+      open
+      title={`${TITLES[action]} · ${affiliate.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Annuler</Button>
+          <Button tone={action === "close" ? "danger" : "primary"} busy={busy} onClick={submit}>
+            Confirmer
+          </Button>
+        </>
+      }
+    >
+      {action === "rate" ? (
+        <Field label="Taux (%)" hint="Laissez vide pour revenir au taux par défaut.">
+          <input className={fieldClass} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^\d.,]/g, ""))} />
+        </Field>
+      ) : (
+        <>
+          {action === "suspend" ? (
+            <Field label="Type de suspension" hint="Pause : temporaire, sans faute. Sanction : motif obligatoire.">
+              <select className={fieldClass} value={mode} onChange={(e) => setMode(e.target.value as SuspensionMode)}>
+                <option value="pause">Pause</option>
+                <option value="sanction">Sanction</option>
+              </select>
+            </Field>
+          ) : null}
+          <Field label="Motif">
+            <input className={fieldClass} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+        </>
+      )}
+    </Dialog>
   );
 }

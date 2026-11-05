@@ -4,7 +4,20 @@
  */
 export type { Incident, Mission, Overview } from "@/features/live-ops";
 export type { Ride } from "@/features/rides";
-export type { Affiliate } from "@/features/affiliate";
+/** Affilié tel que stocké par le faux backend (converti au format du backend WAMI dans les handlers). */
+export interface Affiliate {
+  id: string;
+  name: string;
+  kind: "individual" | "agency";
+  phone: string;
+  code: string;
+  activations: number;
+  pending: number;
+  ratePerActivation: number;
+  paid: number;
+  status: "active" | "suspended" | "closed";
+  commissionRate?: number | null;
+}
 export type { Delivery } from "@/features/delivery";
 export type { B2bAccount, Invoice } from "@/features/delivery-b2b";
 export type { Courier, Round } from "@/features/rounds";
