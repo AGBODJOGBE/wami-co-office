@@ -192,3 +192,10 @@ declareReal("PATCH", "/v1/admin/partners/:id/validate");
 
 // Chauffeurs : temps de connexion par jour (rapport de flotte)
 declareReal("GET", "/v1/admin/drivers/connection-time");
+
+// Configuration système et versions des applications (routes /api/app-config, hors préfixe /admin)
+declareReal("GET", "/v1/app-config/config");
+declareReal("GET", "/v1/app-config/config/:key");
+declareReal("PUT", "/v1/app-config/config/:key");
+declareReal("GET", "/v1/app-config");
+declareReal("PUT", "/v1/app-config/:appType/:platform");

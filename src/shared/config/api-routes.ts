@@ -59,6 +59,13 @@ export const API = {
     pending: `${A}/partners/pending`,
     validate: (id: string) => `${A}/partners/${id}/validate`,
   },
+  // Hors préfixe /admin : ces routes du backend sont montées sous /api/app-config.
+  appConfig: {
+    params: "/v1/app-config/config",
+    param: (key: string) => `/v1/app-config/config/${key}`,
+    versions: "/v1/app-config",
+    version: (appType: string, platform: string) => `/v1/app-config/${appType}/${platform}`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,

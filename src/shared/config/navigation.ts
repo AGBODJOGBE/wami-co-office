@@ -70,6 +70,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "vtc", href: "/vtc", label: "Offres VTC" },
       { module: "parcel-types", href: "/parcel-types", label: "Types de colis" },
       { module: "rbac", href: "/rbac", label: "Rôles et journal" },
+      { module: "system-config", href: "/system-config", label: "Configuration système" },
       { module: "settings", href: "/settings", label: "Paramètres" },
     ],
   },

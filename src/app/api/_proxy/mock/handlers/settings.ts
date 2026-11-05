@@ -1,11 +1,21 @@
 import "server-only";
 import { MODULES, ROLES, ROLE_LABELS, accessOf, type Role } from "@/shared/auth/permissions";
 import { audit, db, newId } from "../db";
-import { find, replace, str } from "../helpers";
+import { find, num, replace, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
 import type { Member, PlatformSettings, Tariff } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Paramètres système et versions d'applications de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockParams: Array<{ id: string; key: string; value: string; type: string; description: string; updatedBy: string; version: number; updatedAt: string; hasSpec: boolean; forcedOutOfBounds: boolean; module: string; label: string; unit: string; displayValue: string; min?: number; max?: number }> = [
+  { id: "sc-1", key: "ride.matching.radius_km", value: "5", type: "NUMBER", description: "Rayon maximal de recherche d'un chauffeur.", updatedBy: "agent-superAdmin", version: 2, updatedAt: new Date().toISOString(), hasSpec: true, forcedOutOfBounds: false, module: "Courses", label: "Rayon de recherche", unit: "km", displayValue: "5 km", min: 1, max: 15 },
+  { id: "sc-2", key: "wallet.withdrawal.auto_approve_max", value: "25000", type: "NUMBER", description: "Montant en dessous duquel un retrait est approuvé automatiquement.", updatedBy: "agent-superAdmin", version: 1, updatedAt: new Date().toISOString(), hasSpec: true, forcedOutOfBounds: false, module: "Portefeuilles", label: "Retrait automatique", unit: "F", displayValue: "25 000 F", min: 0, max: 100000 },
+];
+const mockVersions = [
+  { id: "av-1", appType: "DRIVER", platform: "ANDROID", packageId: "bj.wami.driver", latestVersion: "1.4.0", latestBuild: 42, minSupportedVersion: "1.2.0", minSupportedBuild: 30, forceUpdateAfter: null as string | null, downloadUrl: "https://play.google.com/store/apps/details?id=bj.wami.driver", releaseNotes: "Corrections et nouveau suivi GPS.", updatedAt: new Date().toISOString() },
+  { id: "av-2", appType: "PASSENGER", platform: "IOS", packageId: "bj.wami.app", latestVersion: "2.1.0", latestBuild: 77, minSupportedVersion: "2.0.0", minSupportedBuild: 70, forceUpdateAfter: null as string | null, downloadUrl: "https://apps.apple.com/app/wami", releaseNotes: "", updatedAt: new Date().toISOString() },
+];
 
 /** Rôles créés en démonstration (état en mémoire, comme le reste du faux backend). */
 const mockExtraRoles: Array<{ id: string; name: string; displayName: string; description: string | null; isSystem: boolean; permissions: Array<{ id: string; code: string; name: string; module: string }> }> = [];
@@ -168,6 +178,29 @@ export const settingsRoutes: MockRoute[] = [
   route("GET", `${A}/rbac/audit-log`, "rbac", ({ query }) => {
     const category = query.get("category");
     return db().audit.filter((a) => !category || a.category === category);
+  }),
+
+  // Paramètres système et versions des applications (contrat du backend WAMI : /api/app-config…, hors préfixe /admin).
+  route("GET", "/v1/app-config/config", "system-config", () => mockParams),
+  route("PUT", "/v1/app-config/config/:key", "system-config", ({ params, body, user }) => {
+    if (user.role !== "superAdmin") throw new MockError(403, "Super admin requis.", "forbidden");
+    const p = find(mockParams, (x) => x.key === params.key);
+    const value = str(body, "value");
+    const n = Number(value);
+    const outside = (p.min !== undefined && n < p.min) || (p.max !== undefined && n > p.max);
+    if (outside && body.force !== true) throw invalid(`La valeur est hors bornes (${p.min}–${p.max}).`);
+    if (outside && str(body, "justification").trim().length < 10) throw invalid("justification requise pour forcer.");
+    Object.assign(p, { value, displayValue: `${value}${p.unit ? ` ${p.unit}` : ""}`, version: p.version + 1, updatedAt: new Date().toISOString(), forcedOutOfBounds: outside });
+    audit(user, "Réglages", `Paramètre ${p.key} : ${value}${outside ? " (forcé)" : ""}`);
+    return { id: p.id, key: p.key, value, type: p.type, version: p.version, withinBounds: !outside, forcedOutOfBounds: outside };
+  }),
+  route("GET", "/v1/app-config", "system-config", () => mockVersions),
+  route("PUT", "/v1/app-config/:appType/:platform", "system-config", ({ params, body, user }) => {
+    const v = find(mockVersions, (x) => x.appType === params.appType && x.platform === params.platform);
+    if (!/^\d+\.\d+\.\d+$/.test(str(body, "latestVersion"))) throw invalid("latestVersion invalide");
+    Object.assign(v, { latestVersion: str(body, "latestVersion"), latestBuild: num(body, "latestBuild"), minSupportedVersion: str(body, "minSupportedVersion"), minSupportedBuild: num(body, "minSupportedBuild"), forceUpdateAfter: typeof body.forceUpdateAfter === "string" ? body.forceUpdateAfter : null, downloadUrl: str(body, "downloadUrl"), releaseNotes: str(body, "releaseNotes"), updatedAt: new Date().toISOString() });
+    audit(user, "Réglages", `Versions ${params.appType} ${params.platform} mises à jour`);
+    return v;
   }),
 
   // ── Paramètres ──
