@@ -10,6 +10,7 @@ import { Dialog } from "@/shared/ui/dialog";
 import { Button, Card, Field, fieldClass, InfoRow, Kpi, PageHeader, Segmented, Tag } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { useRidesUi } from "../application/rides.store";
+import { RideDetailDialog } from "./ride-detail-dialog";
 import { ridesUseCases } from "../application/rides.use-cases";
 import { RIDE_CATEGORY_LABELS, totals, type Ride } from "../domain/ride";
 
@@ -63,7 +64,7 @@ export function RidesView() {
                     onSelect={setSelected}
                     empty="Aucune course pour ce filtre."
                     columns={[
-                      { key: "id", header: "Course", render: (r) => r.id },
+                      { key: "id", header: "Course", render: (r) => r.number },
                       { key: "cat", header: "Catégorie", render: (r) => RIDE_CATEGORY_LABELS[r.category] },
                       { key: "status", header: "Statut", render: (r) => <Tag tone={STATUS[r.status][1]}>{STATUS[r.status][0]}</Tag> },
                       { key: "route", header: "Trajet", render: (r) => `${r.from} → ${r.to}` },
@@ -97,11 +98,12 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
   const { busy, run } = useAction();
   const canWrite = useCanWrite("rides");
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(false);
   const [reason, setReason] = useState("");
   return (
     <Card className="flex flex-col gap-1 px-4 py-3.5">
       <div className="flex items-center justify-between">
-        <b className="text-[15px]">{ride.id}</b>
+        <b className="text-[15px]">{ride.number}</b>
         <Tag tone={STATUS[ride.status][1]}>{STATUS[ride.status][0]}</Tag>
       </div>
       <InfoRow label="Client">{ride.customerName}</InfoRow>
@@ -117,12 +119,16 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
       <InfoRow label="Commission WAMI">{fcfa(ride.commission)}</InfoRow>
       <InfoRow label="Paiement">{ride.payment === "cash" ? "Espèces" : ride.payment === "momo" ? "Mobile Money" : "Portefeuille"}</InfoRow>
       {ride.cancelReason ? <InfoRow label="Motif d’annulation">{ride.cancelReason}</InfoRow> : null}
-      <Button className="mt-2" tone="danger" disabled={!canWrite || ride.status !== "inProgress"} onClick={() => setOpen(true)}>
+      <Button className="mt-2" onClick={() => setDetail(true)}>
+        Matching, télémétrie, trace…
+      </Button>
+      {detail ? <RideDetailDialog ride={ride} onClose={() => setDetail(false)} /> : null}
+      <Button tone="danger" disabled={!canWrite || ride.status !== "inProgress"} onClick={() => setOpen(true)}>
         Annuler la course
       </Button>
       <Dialog
         open={open}
-        title={`Annuler ${ride.id}`}
+        title={`Annuler ${ride.number}`}
         onClose={() => setOpen(false)}
         footer={
           <>

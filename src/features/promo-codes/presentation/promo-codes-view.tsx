@@ -58,7 +58,7 @@ export function PromoCodesView() {
                       disabled={!canWrite || busy}
                       onChange={async () => {
                         const r = await run(() => promoCodesUseCases.toggle(p));
-                        if (r) list.mutate((l) => l.map((x) => (x.code === r.code ? r : x)));
+                        if (r !== undefined) list.mutate((l) => l.map((x) => (x.id === p.id ? { ...x, active: !x.active } : x)));
                       }}
                     />
                   ),
@@ -72,9 +72,9 @@ export function PromoCodesView() {
         <CreatePromoDialog
           existing={list.data ?? []}
           onClose={() => setCreating(false)}
-          onDone={(p) => {
-            list.mutate((l) => [p, ...l]);
+          onDone={() => {
             setCreating(false);
+            list.reload();
           }}
         />
       ) : null}
@@ -82,8 +82,9 @@ export function PromoCodesView() {
   );
 }
 
-function CreatePromoDialog({ existing, onClose, onDone }: { existing: PromoCode[]; onClose: () => void; onDone: (p: PromoCode) => void }) {
+function CreatePromoDialog({ existing, onClose, onDone }: { existing: PromoCode[]; onClose: () => void; onDone: () => void }) {
   const [p, setP] = useState<PromoCode>({
+    id: "",
     code: "",
     description: "",
     kind: "percent",
@@ -114,7 +115,7 @@ function CreatePromoDialog({ existing, onClose, onDone }: { existing: PromoCode[
             busy={busy}
             onClick={async () => {
               const r = await run(() => promoCodesUseCases.create(p, existing), "Code promo créé.");
-              if (r) onDone(r);
+              if (r !== undefined) onDone();
             }}
           >
             Créer

@@ -1,10 +1,43 @@
 import "server-only";
 import { audit, db, newId } from "../db";
-import { find, matches, num, replace, requireText, str } from "../helpers";
+import { find, num, replace, requireText, str } from "../helpers";
 import { invalid, route, type MockRoute } from "../router";
-import type { Challenge, Driver } from "../seed-types";
+import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Partenaires en attente de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockPartners: Array<{ id: string; companyName: string; companyType: string; contactPhone: string; contactEmail: string | null; registrationNumber: string | null; createdAt: string }> = [
+  { id: "pt-1", companyName: "Chez Mama Koffi", companyType: "RESTAURANT", contactPhone: "+229 01 96 11 22 33", contactEmail: "mama@example.bj", registrationNumber: "RB/COT/21 B 1234", createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+  { id: "pt-2", companyName: "Pharmacie du Port", companyType: "PHARMACY", contactPhone: "+229 01 96 44 55 66", contactEmail: null, registrationNumber: null, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
+];
+
+/** Contrats passés en prélèvement sur les revenus (démonstration), avec leur taux. */
+const mockShare = new Map<string, number>();
+
+/** Candidatures de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockPending: Array<{ driverId: string; userId: string; isDocumentsVerified: boolean; createdAt: string }> = [
+  { driverId: "cand-1", userId: "u-c1", isDocumentsVerified: true, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+  { driverId: "cand-2", userId: "u-c2", isDocumentsVerified: false, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
+];
+
+/** Configurations de primes de démonstration (état en mémoire, comme le reste du faux backend). */
+interface MockBonus {
+  id: string;
+  name: string;
+  description: null;
+  vehicleCategory: string;
+  isActive: boolean;
+  tiers: Array<Record<string, unknown>>;
+  minRidesPerMonth?: number;
+}
+const mkConfig = (id: string, name: string, tiers: Array<Record<string, unknown>>, isActive: boolean): MockBonus => ({ id, name, description: null, vehicleCategory: "MOTO", isActive, tiers });
+const bonusConfigs: Record<"config" | "activity-config" | "quality-config", MockBonus[]> = {
+  config: [mkConfig("bt-1", "Paliers moto", [{ ridesThreshold: 50, bonusAmount: 5000 }, { ridesThreshold: 150, bonusAmount: 15000 }], true), mkConfig("bt-2", "Paliers moto (test)", [{ ridesThreshold: 30, bonusAmount: 2000 }], false)],
+  "activity-config": [mkConfig("ba-1", "Activité moto", [{ name: "Bronze", ridesThresholdPerDay: 10, bonusPct: 2 }, { name: "Argent", ridesThresholdPerDay: 15, bonusPct: 3 }], true)],
+  "quality-config": [{ ...mkConfig("bq-1", "Qualité moto", [{ minRating: 4.5, bonusAmount: 5000 }, { minRating: 4.8, bonusAmount: 8000 }], true), minRidesPerMonth: 100 }],
+};
+const bonusRun = { welcomeBonusEnabled: true, activityBonusEnabled: true, qualityBonusEnabled: true, activityPayoutFrequency: "WEEKLY" };
 
 /** Vérifications, chauffeurs, véhicules, location-vente, primes, établissements. */
 export const networkRoutes: MockRoute[] = [
@@ -34,22 +67,100 @@ export const networkRoutes: MockRoute[] = [
   }),
 
   // ── Chauffeurs et livreurs ──
+  // Même contrat que le backend WAMI (GET /api/admin/drivers, PATCH …/suspend et …/reactivate).
   route("GET", `${A}/drivers`, "drivers", ({ query }) => {
     const d = db();
-    if (query.get("withoutVehicle")) {
-      const withVehicle = new Set(d.vehicles.map((v) => v.driverId).filter(Boolean));
-      return d.drivers.filter((x) => x.status === "active" && !withVehicle.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
-    }
-    const q = query.get("q") ?? "";
-    return d.drivers.filter((x) => matches(q, x.name, x.phone, x.vehicle));
+    const status = query.get("status");
+    const drivers = d.drivers.map((x) => {
+      const v = d.vehicles.find((veh) => veh.driverId === x.id);
+      const [firstName = "", ...rest] = x.name.split(" ");
+      return {
+        driverId: x.id,
+        firstName,
+        lastName: rest.join(" "),
+        phoneNumber: x.phone,
+        status: x.status !== "active" ? "SUSPENDED" : x.online ? "AVAILABLE" : "OFFLINE",
+        driverType: x.activities.length === 2 ? "BOTH" : x.activities[0] === "courier" ? "DELIVERY" : "VTC",
+        rating: x.rating,
+        totalRides: x.missionsTotal,
+        vehicle: v ? { make: v.kind, model: v.model, color: "", licensePlate: v.plate } : null,
+        createdAt: x.joinedAt,
+      };
+    });
+    const filtered = status ? drivers.filter((x) => x.status === status) : drivers;
+    return { drivers: filtered, total: filtered.length };
   }),
-  route("POST", `${A}/drivers/:id/status`, "drivers", ({ params, body, user }) => {
+  // Candidatures, chauffeurs en ligne, type d'activité, sessions (contrat du backend WAMI).
+  route("GET", `${A}/drivers/connection-time`, "drivers", ({ query }) => {
+    const from = query.get("from");
+    const to = query.get("to");
+    if (!from || !to) throw invalid("from et to sont requis (AAAA-MM-JJ)");
+    const days = [from, to].filter((v, i, a) => a.indexOf(v) === i).map((date, i) => ({ date, totalSeconds: 18_000 - i * 3_600, totalHours: 5 - i }));
+    return { from, to, drivers: db().drivers.filter((d) => d.status === "active").slice(0, 3).map((d, i) => ({ driverId: d.id, days, grandTotalSeconds: days.reduce((s, x) => s + x.totalSeconds, 0) - i * 1_800, grandTotalHours: 0 })) };
+  }),
+  route("GET", `${A}/drivers/pending`, "drivers", () => ({ drivers: mockPending, total: mockPending.length })),
+  route("PATCH", `${A}/drivers/:id/approve`, "drivers", ({ params, user }) => {
+    const i = mockPending.findIndex((p) => p.driverId === params.id);
+    if (i < 0) throw invalid("Driver not found");
+    mockPending.splice(i, 1);
+    audit(user, "Comptes", `A approuvé la candidature ${params.id}`);
+    return { driverId: params.id, status: "OFFLINE", message: "Driver has been approved" };
+  }),
+  route("GET", `${A}/drivers/online`, "drivers", () => {
+    const drivers = db().drivers.filter((d) => d.online && d.status === "active").map((d, i) => {
+      const [firstName = "", ...rest] = d.name.split(" ");
+      return { driverId: d.id, firstName, lastName: rest.join(" "), phoneNumber: d.phone, photoUrl: null, rating: d.rating, totalRides: d.missionsTotal, latitude: 6.37 + i * 0.01, longitude: 2.39 + i * 0.01, heading: null, speed: null, vehicle: { vehicleId: `v-${d.id}`, vehicleType: "MOTO", make: d.vehicle, model: "", color: "", licensePlate: "" }, currentRideId: null, isInRide: i % 2 === 1, updatedAt: new Date().toISOString() };
+    });
+    return { drivers, total: drivers.length };
+  }),
+  route("PATCH", `${A}/drivers/:id/info`, "drivers", ({ params, body, user }) => {
     const d = find(db().drivers, (x) => x.id === params.id);
-    const status = str(body, "status") as Driver["status"];
+    const [first = "", ...rest] = d.name.split(" ");
+    const firstName = str(body, "firstName") || first;
+    const lastName = str(body, "lastName") || rest.join(" ");
+    const phone = str(body, "phoneNumber") || d.phone;
+    audit(user, "Comptes", `A modifié les informations de ${d.name}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, name: `${firstName} ${lastName}`.trim(), phone });
+    return { driverId: d.id, userId: d.id, firstName, lastName, phoneNumber: phone, isPhoneVerified: !str(body, "phoneNumber"), isEmailVerified: false, message: "Driver info updated" };
+  }),
+  route("PATCH", `${A}/drivers/:id/driver-type`, "drivers", ({ params, body, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
+    const t = str(body, "driverType");
+    if (!["VTC", "DELIVERY", "BOTH"].includes(t)) throw invalid("driverType must be one of: VTC, DELIVERY, BOTH");
+    audit(user, "Comptes", `Type d’activité de ${d.name} : ${t}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, activities: t === "BOTH" ? ["driver", "courier"] : t === "DELIVERY" ? ["courier"] : ["driver"] });
+    return { driverId: d.id, driverType: t, message: `Driver type updated to ${t}.` };
+  }),
+  route("GET", `${A}/drivers/:id/sessions`, "drivers", ({ params }) => ({
+    sessions: [
+      { id: `${params.id}-s1`, driverId: params.id, startedAt: new Date(Date.now() - 7_200_000).toISOString(), endedAt: null, durationSeconds: null, endReason: null },
+      { id: `${params.id}-s2`, driverId: params.id, startedAt: new Date(Date.now() - 90_000_000).toISOString(), endedAt: new Date(Date.now() - 80_000_000).toISOString(), durationSeconds: 10_000, endReason: "LOGOUT" },
+    ],
+    total: 2, totalDurationSeconds: 10_000, page: 1, limit: 20,
+  })),
+  route("PATCH", `${A}/drivers/:id/suspend`, "drivers", ({ params, body, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
     const reason = str(body, "reason");
-    if (status === "suspended") requireText(reason, 10, "Motif de suspension obligatoire.");
-    audit(user, "Comptes", `${status === "suspended" ? "A suspendu" : "A réactivé"} ${d.name}${reason ? ` · ${reason}` : ""}`);
-    return replace(db().drivers, (x) => x.id === d.id, { ...d, status, online: false, suspensionReason: status === "suspended" ? reason : null });
+    requireText(reason, 1, "reason is required");
+    audit(user, "Comptes", `A suspendu ${d.name} · ${reason}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, status: "suspended", online: false, suspensionReason: reason });
+    return { driverId: d.id, status: "SUSPENDED", message: `Driver suspended: ${reason}` };
+  }),
+  route("PATCH", `${A}/drivers/:id/reactivate`, "drivers", ({ params, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
+    audit(user, "Comptes", `A réactivé ${d.name}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, status: "active", online: false, suspensionReason: null });
+    return { driverId: d.id, status: "OFFLINE", message: "Driver reactivated successfully" };
+  }),
+
+  // Partenaires à valider (contrat du backend WAMI : GET /api/admin/partners/pending, PATCH …/validate).
+  route("GET", `${A}/partners/pending`, "partners", () => ({ partners: mockPartners, total: mockPartners.length })),
+  route("PATCH", `${A}/partners/:id/validate`, "partners", ({ params, user }) => {
+    const i = mockPartners.findIndex((p) => p.id === params.id);
+    if (i < 0) throw invalid("Partner not found");
+    const [p] = mockPartners.splice(i, 1);
+    audit(user, "Comptes", `A validé le partenaire ${p!.companyName}`);
+    return { partnerId: p!.id, companyName: p!.companyName, status: "ACTIVE", message: "Partner validated" };
   }),
 
   // ── Véhicules ──
@@ -67,30 +178,158 @@ export const networkRoutes: MockRoute[] = [
     return replace(db().vehicles, (x) => x.id === v.id, { ...v, driverId: d.id, driverName: d.name, status: "inService" });
   }),
 
-  // ── Location-vente ──
-  route("GET", `${A}/lease-contracts`, "contracts", () => db().contracts),
-  route("POST", `${A}/lease-contracts/:id/payments`, "contracts", ({ params, body, user }) => {
+  // ── Location-vente ── (contrat du backend WAMI : /api/admin/contracts…)
+  route("GET", `${A}/contracts`, "contracts", () => {
+    const items = db().contracts.map((c) => {
+      const paid = c.payments.reduce((s, p) => s + p.amount, 0);
+      const elapsed = Math.max(0, Math.min(c.weeks, Math.floor((Date.now() - new Date(c.startDate).getTime()) / (7 * 86_400_000))));
+      const behind = Math.max(0, Math.min(c.totalPrice, elapsed * c.weeklyInstallment) - paid);
+      const [make = "", ...model] = c.vehicleLabel.split(" ");
+      return {
+        id: c.id,
+        driverId: db().drivers.find((d) => d.name === c.driverName)?.id ?? "unknown",
+        dateDebut: c.startDate,
+        dateFinPrevue: new Date(new Date(c.startDate).getTime() + c.weeks * 7 * 86_400_000).toISOString(),
+        frequenceEcheances: "HEBDOMADAIRE",
+        nbEcheances: c.weeks,
+        montantTotal: c.totalPrice,
+        downPayment: c.deposit,
+        montantEcheance: c.weeklyInstallment,
+        montantPaye: paid,
+        montantRestant: Math.max(0, c.totalPrice - paid),
+        statut: c.status === "active" ? "ACTIF" : c.status === "suspended" ? "SUSPENDU" : c.status === "completed" ? "TERMINE" : "ROMPU",
+        nbImpayes: behind > 0 ? Math.ceil(behind / c.weeklyInstallment) : 0,
+        modeRemboursement: mockShare.has(c.id) ? "PAR_REVENU" : "ECHEANCIER",
+        vehicle: { licensePlate: c.plate, make, model: model.join(" ") },
+      };
+    });
+    return { items, total: items.length, page: 1, limit: 100 };
+  }),
+  route("GET", `${A}/contracts/:id/installments`, "contracts", ({ params }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    let credit = c.payments.reduce((s, p) => s + p.amount, 0);
+    const items = Array.from({ length: Math.min(c.weeks, 12) }, (_, i) => {
+      const due = new Date(new Date(c.startDate).getTime() + (i + 1) * 7 * 86_400_000);
+      const paid = Math.min(c.weeklyInstallment, credit);
+      credit -= paid;
+      const status = paid >= c.weeklyInstallment ? "PAYEE" : due.getTime() > Date.now() ? "EN_ATTENTE" : paid > 0 ? "PARTIELLEMENT_RECOUVREE" : "IMPAYEE";
+      return { id: `${c.id}-i${i + 1}`, numero: i + 1, dateEcheance: due.toISOString(), montant: c.weeklyInstallment, montantPaye: paid, statut: status };
+    });
+    return { contractId: c.id, items };
+  }),
+  route("POST", `${A}/contracts/:id/manual-payment`, "contracts", ({ params, body, user }) => {
     const c = find(db().contracts, (x) => x.id === params.id);
     const amount = num(body, "amount");
     const paid = c.payments.reduce((s, p) => s + p.amount, 0);
     if (!(amount > 0) || amount > c.totalPrice - paid) throw invalid("Montant invalide.");
-    const method = (["cash", "momo", "earnings"] as const).find((m) => m === body.method) ?? "momo";
-    const payments = [...c.payments, { id: newId("pay"), date: new Date().toISOString(), amount, method }];
+    requireText(str(body, "reference"), 1, "reference is required");
+    const method = body.paymentMethod === "ESPECES" ? "cash" : "momo";
+    const payments = [...c.payments, { id: newId("pay"), date: new Date().toISOString(), amount, method } as const];
     const settled = payments.reduce((s, p) => s + p.amount, 0) >= c.totalPrice;
     audit(user, "Argent", `A encaissé ${amount} F · contrat ${c.id} (${c.driverName})`);
-    return replace(db().contracts, (x) => x.id === c.id, { ...c, payments, status: settled ? "completed" : c.status });
+    replace(db().contracts, (x) => x.id === c.id, { ...c, payments: [...payments], status: settled ? "completed" : c.status });
+    return { amount, imputedAmount: amount, installmentsSettled: 0, installmentsPartiallyPaid: 0, contractCompleted: settled };
+  }),
+  route("GET", `${A}/contracts/dashboard/kpis`, "contracts", () => {
+    const list = db().contracts;
+    const paid = list.reduce((t, c) => t + c.payments.reduce((s, p) => s + p.amount, 0), 0);
+    const total = list.reduce((t, c) => t + c.totalPrice, 0);
+    return {
+      contracts: { total: list.length, active: list.filter((c) => c.status === "active").length, suspended: list.filter((c) => c.status === "suspended").length, completed: list.filter((c) => c.status === "completed").length, broken: list.filter((c) => c.status === "terminated").length },
+      financials: { totalMontantTotal: total, totalDownPayment: 0, totalMontantNetAFinancer: total, totalMontantPaye: paid, totalMontantRestant: total - paid, totalResidualDebt: 0 },
+      installments: { enAttente: 20, enRecouvrement: 0, partiellementRecouvree: 0, payee: 23, impayee: 4, annulee: 0, overdueCount: 4 },
+      blocking: { atRiskCount: 1, blockedCount: 1, threshold: 3 },
+    };
+  }),
+  route("GET", `${A}/contracts/audit-logs`, "contracts", () => ({
+    items: db().contracts.slice(0, 3).map((c, i) => ({ id: `au-${i}`, contractId: c.id, driverId: "drv-1", action: i === 0 ? "MANUAL_PAYMENT" : "CONTRACT_CREATED", performedBy: "agent-finance", details: { amount: 15_000, paymentMethod: "ESPECES" }, occurredAt: new Date(Date.now() - i * 86_400_000).toISOString() })),
+    total: 3, page: 1, limit: 50,
+  })),
+  route("GET", `${A}/contracts/revenue-share/alerts`, "contracts", () => ({ items: [{ contractId: "LV-003", driverId: "drv-5", montantNonReconnu: 0, montantRestant: 1_025_000, lastWithholdingDate: null, reasons: ["INACTIVITY"] }], total: 1, page: 1, limit: 50 })),
+  route("GET", `${A}/contracts/:id/revenue-share/withholdings`, "contracts", () => ({ items: [{ transactionId: "wh-1", amount: 3_200, sourceType: "RIDE", sourceId: "r1", date: new Date().toISOString() }], total: 1, page: 1, limit: 50 })),
+  route("POST", `${A}/contracts/:id/repayment-mode`, "contracts", ({ params, body, user }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    if (body.mode !== "PAR_REVENU") throw invalid("mode doit valoir 'PAR_REVENU'");
+    const taux = typeof body.taux === "number" ? body.taux : 0.2;
+    if (!(taux > 0 && taux <= 1)) throw invalid("tauxPrelevementRevenu must satisfy 0 < taux <= 1");
+    mockShare.set(c.id, taux);
+    audit(user, "Argent", `Contrat ${c.id} : prélèvement sur les revenus à ${taux * 100} %`);
+    return { contractId: c.id, modeRemboursement: "PAR_REVENU", tauxPrelevementRevenu: taux, cancelledInstallmentsCount: 12, driverUnblocked: false };
+  }),
+  route("PATCH", `${A}/contracts/:id/revenue-share-rate`, "contracts", ({ params, body, user }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    if (!mockShare.has(c.id)) throw invalid("Contract is not in PAR_REVENU mode");
+    if (typeof body.taux !== "number" || !(body.taux > 0 && body.taux <= 1)) throw invalid("tauxPrelevementRevenu must satisfy 0 < taux <= 1");
+    mockShare.set(c.id, body.taux);
+    audit(user, "Argent", `Contrat ${c.id} : taux de prélèvement ${body.taux * 100} %`);
+    return { contractId: c.id, tauxPrelevementRevenu: body.taux };
+  }),
+  route("POST", `${A}/contracts/drivers/:driverId/unblock`, "contracts", ({ params, user }) => {
+    audit(user, "Argent", `Chauffeur ${params.driverId} débloqué`);
+    return { driverId: params.driverId, status: "OFFLINE" };
+  }),
+  ...(["suspend", "resume", "break"] as const).map((action) =>
+    route("POST", `${A}/contracts/:id/${action}`, "contracts", ({ params, body, user }) => {
+      const c = find(db().contracts, (x) => x.id === params.id);
+      if (action === "break") requireText(str(body, "reason"), 1, "reason is required");
+      const status = action === "suspend" ? "suspended" : action === "resume" ? "active" : "terminated";
+      audit(user, "Argent", `Contrat ${c.id} : ${action}`);
+      replace(db().contracts, (x) => x.id === c.id, { ...c, status });
+      return { id: c.id, statut: status };
+    }),
+  ),
+
+  // ── Primes chauffeurs ── (contrat du backend WAMI : /api/admin/driver-bonus/…)
+  ...(["config", "activity-config", "quality-config"] as const).flatMap((kind) => {
+    const list = bonusConfigs[kind];
+    return [
+      route("GET", `${A}/driver-bonus/${kind}`, "driver-bonus", () => list),
+      ...(["activate", "deactivate"] as const).map((action) =>
+        route("POST", `${A}/driver-bonus/${kind}/:id/${action}`, "driver-bonus", ({ params, user }) => {
+          const c = find(list, (x) => x.id === params.id);
+          audit(user, "Argent", `Prime « ${c.name} » : ${action}`);
+          for (const x of list) x.isActive = action === "activate" ? x.id === c.id : x.isActive && x.id !== c.id;
+          return { id: c.id, isActive: c.isActive };
+        }),
+      ),
+      route("POST", `${A}/driver-bonus/${kind}`, "driver-bonus", ({ body, user }) => {
+        if (!str(body, "name") || !Array.isArray(body.tiers) || body.tiers.length === 0) throw invalid("name et tiers obligatoires");
+        const c: MockBonus = { id: newId("bc"), name: str(body, "name"), description: null, vehicleCategory: str(body, "vehicleCategory") || "ALL", isActive: false, tiers: body.tiers as Array<Record<string, unknown>>, ...(typeof body.minRidesPerMonth === "number" ? { minRidesPerMonth: body.minRidesPerMonth } : {}) };
+        list.push(c);
+        audit(user, "Argent", `Prime « ${c.name} » créée`);
+        return { id: c.id };
+      }),
+      route("PUT", `${A}/driver-bonus/${kind}/:id`, "driver-bonus", ({ params, body, user }) => {
+        const c = find(list, (x) => x.id === params.id);
+        if (Array.isArray(body.tiers) && body.tiers.length === 0) throw invalid("tiers ne peut pas être vide");
+        Object.assign(c, { name: str(body, "name") || c.name, ...(Array.isArray(body.tiers) ? { tiers: body.tiers } : {}), ...(typeof body.minRidesPerMonth === "number" ? { minRidesPerMonth: body.minRidesPerMonth } : {}) });
+        audit(user, "Argent", `Prime « ${c.name} » modifiée`);
+        return { id: c.id };
+      }),
+      route("DELETE", `${A}/driver-bonus/${kind}/:id`, "driver-bonus", ({ params, user }) => {
+        const c = find(list, (x) => x.id === params.id);
+        if (c.isActive) throw invalid("Cannot delete an active configuration");
+        list.splice(list.indexOf(c), 1);
+        audit(user, "Argent", `Prime « ${c.name} » supprimée`);
+        return { id: c.id };
+      }),
+    ];
+  }),
+  route("GET", `${A}/driver-bonus/awards`, "driver-bonus", () => [{ id: "aw-1", driverId: "drv-1", vehicleCategory: "MOTO", ridesThreshold: 50, bonusAmount: 5000, configId: "bt-1", transactionId: "tx-1", awardedAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/activity-ledger`, "driver-bonus", () => [{ id: "al-1", driverId: "drv-2", vehicleCategory: "MOTO", activityDate: "2026-11-04", ridesCount: 14, netAmount: 21000, tierPctApplied: 3, bonusAmount: 630, configId: "ba-1", paid: false, paidAt: null, transactionId: null, createdAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/activity-payouts`, "driver-bonus", () => [{ id: "ap-1", driverId: "drv-2", payoutRunDate: "2026-11-03", coveredLedgerIds: ["al-0"], totalAmount: 3200, transactionId: "tx-2", createdAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/quality-ledger`, "driver-bonus", () => [{ id: "ql-1", driverId: "drv-1", vehicleCategory: "MOTO", yearMonth: "2026-10", ridesCount: 210, averageRating: 4.8, bonusAmount: 8000, configId: "bq-1", transactionId: "tx-3", awardedAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/run-config`, "driver-bonus", () => bonusRun),
+  route("PUT", `${A}/driver-bonus/run-config`, "driver-bonus", ({ body, user }) => {
+    for (const k of ["welcomeBonusEnabled", "activityBonusEnabled", "qualityBonusEnabled"] as const) if (typeof body[k] === "boolean") bonusRun[k] = body[k];
+    audit(user, "Argent", "Calendrier des primes modifié");
+    return bonusRun;
   }),
 
-  // ── Primes ──
+  // ── Défis chauffeurs ── (route absente du backend : données fictives)
   route("GET", `${A}/driver-bonus/challenges`, "driver-bonus", () => db().challenges),
   route("POST", `${A}/driver-bonus/challenges`, "driver-bonus", ({ body, user }) => {
-    const c: Challenge = {
-      ...(body as unknown as Omit<Challenge, "id" | "participants" | "achievers" | "archived">),
-      id: newId("ch"),
-      participants: 0,
-      achievers: 0,
-      archived: false,
-    };
+    const c: Challenge = { ...(body as unknown as Omit<Challenge, "id" | "participants" | "achievers" | "archived">), id: newId("ch"), participants: 0, achievers: 0, archived: false };
     db().challenges.unshift(c);
     audit(user, "Argent", `A créé le challenge « ${c.title} » (${c.targetMissions} missions → ${c.reward} F)`);
     return c;

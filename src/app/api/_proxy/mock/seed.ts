@@ -49,7 +49,6 @@ export interface MockDb {
   drivers: Driver[];
   vehicles: Vehicle[];
   contracts: Contract[];
-  challenges: Challenge[];
   establishments: Establishment[];
   tickets: Ticket[];
   wallets: Wallet[];
@@ -59,6 +58,7 @@ export interface MockDb {
   affiliates: Affiliate[];
   referralProgram: ReferralProgram;
   referrals: Referral[];
+  challenges: Challenge[];
   campaigns: Campaign[];
   zones: Zone[];
   tariffs: Record<string, Tariff[]>;
@@ -214,12 +214,12 @@ export function seed(): MockDb {
       { id: "INC-2", missionId: "WMI-9FD1A", type: "customerUnreachable", summary: "Destinataire injoignable à la livraison", openedAt: minutesAgo(40), status: "open" },
     ],
     rides: [
-      { id: "WMI-2RT9B", category: "moto", status: "inProgress", customerName: "[Client] Nadège A.", driverName: "[Chauffeur] Rodrigue H.", from: "Cadjèhoun", to: "Jéricho", distanceKm: 3.4, durationMin: 11, price: 1200, waitingFee: 0, commission: 180, payment: "cash", requestedAt: minutesAgo(9), cancelReason: null, cancelledBy: null },
-      { id: "WMI-6TZ3R", category: "moto", status: "completed", customerName: "[Client] Gisèle A.", driverName: "[Chauffeur] Koffi A.", from: "Ganhi", to: "Fidjrossè", distanceKm: 7.8, durationMin: 24, price: 2800, waitingFee: 100, commission: 435, payment: "momo", requestedAt: minutesAgo(140), cancelReason: null, cancelledBy: null },
-      { id: "WMI-5PL2Q", category: "autoEco", status: "completed", customerName: "[Client] Serge D.", driverName: "[Chauffeur] Marius K.", from: "Aéroport", to: "Haie Vive", distanceKm: 4.2, durationMin: 13, price: 2900, waitingFee: 0, commission: 435, payment: "wallet", requestedAt: minutesAgo(220), cancelReason: null, cancelledBy: null },
-      { id: "WMI-1AB7C", category: "moto", status: "cancelled", customerName: "[Client] Kevin S.", driverName: null, from: "Zogbo", to: "Akpakpa", distanceKm: 6.1, durationMin: 0, price: 0, waitingFee: 0, commission: 0, payment: "cash", requestedAt: minutesAgo(300), cancelReason: "Aucun chauffeur trouvé", cancelledBy: "customer" },
-      { id: "WMI-3KD8M", category: "autoConfort", status: "completed", customerName: "[Client] Aminatou B.", driverName: "[Chauffeur] Hervé G.", from: "Cocotiers", to: "Calavi Kpota", distanceKm: 14.5, durationMin: 38, price: 7200, waitingFee: 150, commission: 1103, payment: "momo", requestedAt: minutesAgo(380), cancelReason: null, cancelledBy: null },
-      { id: "WMI-8XV4N", category: "tricycle", status: "completed", customerName: "[Client] Fabrice Z.", driverName: "[Chauffeur] Bio C.", from: "Dantokpa", to: "Gbégamey", distanceKm: 3.9, durationMin: 19, price: 1500, waitingFee: 0, commission: 225, payment: "cash", requestedAt: minutesAgo(460), cancelReason: null, cancelledBy: null },
+      { id: "WMI-2RT9B", number: "WMI-2RT9B", category: "moto", status: "inProgress", customerName: "[Client] Nadège A.", driverName: "[Chauffeur] Rodrigue H.", from: "Cadjèhoun", to: "Jéricho", distanceKm: 3.4, durationMin: 11, price: 1200, waitingFee: 0, commission: 180, payment: "cash", requestedAt: minutesAgo(9), cancelReason: null, cancelledBy: null },
+      { id: "WMI-6TZ3R", number: "WMI-6TZ3R", category: "moto", status: "completed", customerName: "[Client] Gisèle A.", driverName: "[Chauffeur] Koffi A.", from: "Ganhi", to: "Fidjrossè", distanceKm: 7.8, durationMin: 24, price: 2800, waitingFee: 100, commission: 435, payment: "momo", requestedAt: minutesAgo(140), cancelReason: null, cancelledBy: null },
+      { id: "WMI-5PL2Q", number: "WMI-5PL2Q", category: "autoEco", status: "completed", customerName: "[Client] Serge D.", driverName: "[Chauffeur] Marius K.", from: "Aéroport", to: "Haie Vive", distanceKm: 4.2, durationMin: 13, price: 2900, waitingFee: 0, commission: 435, payment: "wallet", requestedAt: minutesAgo(220), cancelReason: null, cancelledBy: null },
+      { id: "WMI-1AB7C", number: "WMI-1AB7C", category: "moto", status: "cancelled", customerName: "[Client] Kevin S.", driverName: null, from: "Zogbo", to: "Akpakpa", distanceKm: 6.1, durationMin: 0, price: 0, waitingFee: 0, commission: 0, payment: "cash", requestedAt: minutesAgo(300), cancelReason: "Aucun chauffeur trouvé", cancelledBy: "customer" },
+      { id: "WMI-3KD8M", number: "WMI-3KD8M", category: "autoConfort", status: "completed", customerName: "[Client] Aminatou B.", driverName: "[Chauffeur] Hervé G.", from: "Cocotiers", to: "Calavi Kpota", distanceKm: 14.5, durationMin: 38, price: 7200, waitingFee: 150, commission: 1103, payment: "momo", requestedAt: minutesAgo(380), cancelReason: null, cancelledBy: null },
+      { id: "WMI-8XV4N", number: "WMI-8XV4N", category: "tricycle", status: "completed", customerName: "[Client] Fabrice Z.", driverName: "[Chauffeur] Bio C.", from: "Dantokpa", to: "Gbégamey", distanceKm: 3.9, durationMin: 19, price: 1500, waitingFee: 0, commission: 225, payment: "cash", requestedAt: minutesAgo(460), cancelReason: null, cancelledBy: null },
     ],
     deliveries: [
       { id: "WMI-8K2PD", type: "meal", status: "inTransit", detail: "Le Palmier", senderName: "Le Palmier", recipientName: "[Client] Mariam K.", courierName: "[Livreur] Aïcha B.", from: "Cadjèhoun", to: "Fidjrossè", price: 1000, cashToCollect: 0, createdAt: minutesAgo(48), promisedAt: minutesAgo(6) },
@@ -383,11 +383,6 @@ export function seed(): MockDb {
       { id: "LV-003", driverName: "[Chauffeur] Bio C.", vehicleLabel: "TVS King", plate: "EF 9012 RB", startDate: daysAgo(84), totalPrice: 1_200_000, deposit: 100_000, weeklyInstallment: 25_000, weeks: 48, status: "active", payments: Array.from({ length: 7 }, (_, i) => ({ id: `p3-${i}`, date: daysAgo(84 - 7 * i), amount: 25_000, method: "cash" as const })) },
       { id: "LV-004", driverName: "[Chauffeur] Rodrigue H.", vehicleLabel: "Bajaj Boxer", plate: "MN 2020 RB", startDate: daysAgo(300), totalPrice: 600_000, deposit: 50_000, weeklyInstallment: 15_000, weeks: 40, status: "completed", payments: [{ id: "p4", date: daysAgo(10), amount: 600_000, method: "momo" }] },
     ],
-    challenges: [
-      { id: "ch-1", title: "Rush de fin de mois", zone: "Cotonou centre", service: "ride", targetMissions: 60, reward: 10_000, startsAt: daysAgo(4), endsAt: daysFromNow(3), participants: 182, achievers: 37, archived: false },
-      { id: "ch-2", title: "Livreurs du week-end", zone: "Cotonou centre", service: "delivery", targetMissions: 25, reward: 5_000, startsAt: daysFromNow(2), endsAt: daysFromNow(4), participants: 0, achievers: 0, archived: false },
-      { id: "ch-3", title: "Lancement Abomey-Calavi", zone: "Abomey-Calavi", service: "all", targetMissions: 40, reward: 8_000, startsAt: daysAgo(30), endsAt: daysAgo(16), participants: 64, achievers: 21, archived: false },
-    ],
     establishments: [
       { id: "e-1", name: "Le Palmier", activity: "restaurant", district: "Cadjèhoun", status: "open", ownerName: "[Gérant]", ownerPhone: "+229 01 •• •• 42", since: "mars 2026", commissionRate: null, defaultCommissionRate: 0.12, rating: 4.6, sales30d: 1_845_000, rejectionRate: 0.03, payout: "Hebdomadaire · MTN MoMo" },
       { id: "e-2", name: "Hôtel Les Cocotiers", activity: "hotel", district: "Fidjrossè", status: "open", ownerName: "[Gérant]", ownerPhone: "+229 01 •• •• 17", since: "avril 2026", commissionRate: 0.1, defaultCommissionRate: 0.12, rating: 4.4, sales30d: 4_210_000, rejectionRate: 0.01, payout: "Hebdomadaire · Banque •• 4410" },
@@ -459,11 +454,11 @@ export function seed(): MockDb {
       },
     ],
     wallets: [
-      { id: "w-1", ownerName: "[Client] Gisèle A.", ownerType: "client", phone: "+229 01 97 11 00 01", balance: 4_500, status: "active", movements: [{ id: "wm1", at: minutesAgo(200), label: "Recharge MTN MoMo", amount: 5_000 }, { id: "wm2", at: minutesAgo(140), label: "Course WMI-6TZ3R", amount: -500 }] },
-      { id: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerType: "partner", phone: "+229 01 97 00 00 01", balance: 38_200, status: "active", movements: [{ id: "wm3", at: daysAgo(1), label: "Gains de la journée", amount: 21_400 }, { id: "wm4", at: daysAgo(1), label: "Échéance location-vente", amount: -16_250 }] },
-      { id: "w-3", ownerName: "[Chauffeur] Marius K.", ownerType: "partner", phone: "+229 01 97 00 00 03", balance: -6_700, status: "active", movements: [{ id: "wm5", at: daysAgo(2), label: "Commission due sur courses en espèces", amount: -16_900 }, { id: "wm6", at: daysAgo(2), label: "Gains app", amount: 10_200 }] },
-      { id: "w-4", ownerName: "Le Palmier", ownerType: "establishment", phone: "+229 01 •• •• 42", balance: 405_780, status: "active", movements: [{ id: "wm7", at: daysAgo(0), label: "Ventes de la semaine", amount: 468_500 }] },
-      { id: "w-5", ownerName: "[Client] Compte suspect", ownerType: "client", phone: "+229 01 97 11 00 09", balance: 50_000, status: "frozen", movements: [{ id: "wm8", at: daysAgo(3), label: "Recharges multiples en 5 min", amount: 50_000 }] },
+      { id: "w-1", ownerName: "[Client] Gisèle A.", ownerType: "client", phone: "+229 01 97 11 00 01", balance: 4_500, status: "active", withdrawalsBlocked: false, withdrawalsBlockedReason: null, movements: [{ id: "wm1", at: minutesAgo(200), label: "Recharge MTN MoMo", amount: 5_000 }, { id: "wm2", at: minutesAgo(140), label: "Course WMI-6TZ3R", amount: -500 }] },
+      { id: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerType: "partner", phone: "+229 01 97 00 00 01", balance: 38_200, status: "active", withdrawalsBlocked: false, withdrawalsBlockedReason: null, movements: [{ id: "wm3", at: daysAgo(1), label: "Gains de la journée", amount: 21_400 }, { id: "wm4", at: daysAgo(1), label: "Échéance location-vente", amount: -16_250 }] },
+      { id: "w-3", ownerName: "[Chauffeur] Marius K.", ownerType: "partner", phone: "+229 01 97 00 00 03", balance: -6_700, status: "active", withdrawalsBlocked: false, withdrawalsBlockedReason: null, movements: [{ id: "wm5", at: daysAgo(2), label: "Commission due sur courses en espèces", amount: -16_900 }, { id: "wm6", at: daysAgo(2), label: "Gains app", amount: 10_200 }] },
+      { id: "w-4", ownerName: "Le Palmier", ownerType: "establishment", phone: "+229 01 •• •• 42", balance: 405_780, status: "active", withdrawalsBlocked: false, withdrawalsBlockedReason: null, movements: [{ id: "wm7", at: daysAgo(0), label: "Ventes de la semaine", amount: 468_500 }] },
+      { id: "w-5", ownerName: "[Client] Compte suspect", ownerType: "client", phone: "+229 01 97 11 00 09", balance: 50_000, status: "frozen", withdrawalsBlocked: false, withdrawalsBlockedReason: null, movements: [{ id: "wm8", at: daysAgo(3), label: "Recharges multiples en 5 min", amount: 50_000 }] },
     ],
     financeSummary: { collected: 18_420_000, commission: 2_316_000, toPay: 6_912_400, cashCommissionDue: 1_184_500, cashCommissionDebtors: 236, refunds: 96_500 },
     batch: {
@@ -483,14 +478,19 @@ export function seed(): MockDb {
       ],
     },
     promos: [
-      { code: "BIENVENUE", description: "1re course à moitié prix", kind: "percent", value: 50, cap: 1000, maxUses: 1000, used: 312, services: ["ride"], startsAt: daysAgo(10), endsAt: daysFromNow(25), fundedBy: "wami", firstOrderOnly: true, active: true },
-      { code: "LIVRAISON0", description: "Livraison offerte dès 5 000 F de repas", kind: "fixed", value: 800, cap: null, maxUses: 500, used: 498, services: ["meal"], startsAt: daysAgo(20), endsAt: daysFromNow(10), fundedBy: "shared", firstOrderOnly: false, active: true },
-      { code: "NOEL2026", description: "−15 % sur les billets de bus", kind: "percent", value: 15, cap: 2000, maxUses: 2000, used: 0, services: ["bus"], startsAt: daysFromNow(40), endsAt: daysFromNow(55), fundedBy: "wami", firstOrderOnly: false, active: true },
+      { id: "BIENVENUE", code: "BIENVENUE", description: "1re course à moitié prix", kind: "percent", value: 50, cap: 1000, maxUses: 1000, used: 312, services: ["ride"], startsAt: daysAgo(10), endsAt: daysFromNow(25), fundedBy: "wami", firstOrderOnly: true, active: true },
+      { id: "LIVRAISON0", code: "LIVRAISON0", description: "Livraison offerte dès 5 000 F de repas", kind: "fixed", value: 800, cap: null, maxUses: 500, used: 498, services: ["meal"], startsAt: daysAgo(20), endsAt: daysFromNow(10), fundedBy: "shared", firstOrderOnly: false, active: true },
+      { id: "NOEL2026", code: "NOEL2026", description: "−15 % sur les billets de bus", kind: "percent", value: 15, cap: 2000, maxUses: 2000, used: 0, services: ["bus"], startsAt: daysFromNow(40), endsAt: daysFromNow(55), fundedBy: "wami", firstOrderOnly: false, active: true },
     ],
     affiliates: [
       { id: "af-1", name: "[Apporteur] Agence Mobilité Plus", kind: "agency", phone: "+229 01 96 00 10 10", code: "MOBPLUS", activations: 42, pending: 6, ratePerActivation: 5_000, paid: 150_000, status: "active" },
       { id: "af-2", name: "[Apporteur] Théophile K.", kind: "individual", phone: "+229 01 96 00 20 20", code: "THEO", activations: 9, pending: 2, ratePerActivation: 5_000, paid: 40_000, status: "active" },
       { id: "af-3", name: "[Apporteur] Moto Club Calavi", kind: "agency", phone: "+229 01 96 00 30 30", code: "MCCALAVI", activations: 3, pending: 0, ratePerActivation: 5_000, paid: 0, status: "suspended" },
+    ],
+    challenges: [
+      { id: "ch-1", title: "Rush de fin de mois", zone: "Cotonou centre", service: "ride", targetMissions: 60, reward: 10_000, startsAt: daysAgo(4), endsAt: daysFromNow(3), participants: 182, achievers: 37, archived: false },
+      { id: "ch-2", title: "Livreurs du week-end", zone: "Cotonou centre", service: "delivery", targetMissions: 25, reward: 5_000, startsAt: daysFromNow(2), endsAt: daysFromNow(4), participants: 0, achievers: 0, archived: false },
+      { id: "ch-3", title: "Lancement Abomey-Calavi", zone: "Abomey-Calavi", service: "all", targetMissions: 40, reward: 8_000, startsAt: daysAgo(30), endsAt: daysAgo(16), participants: 64, achievers: 21, archived: false },
     ],
     referralProgram: { active: true, referrerReward: 1000, refereeReward: 500, requiredMissions: 2 },
     referrals: [

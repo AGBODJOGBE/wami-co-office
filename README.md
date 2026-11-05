@@ -28,19 +28,25 @@ Connexion de démonstration : n'importe quel e-mail, code **123456**, et le rôl
 Copiez `.env.example` en `.env.local` :
 
 ```bash
-WAMI_API_URL=https://api.wami.example   # vide = faux backend
+WAMI_API_URL=https://api.wami.example   # vide = faux backend pour tout
 SESSION_SECRET=une-chaine-aleatoire-de-32-caracteres-minimum
 ```
 
 - Le navigateur n'appelle **jamais** le backend directement. Il appelle `/api/v1/...` ;
-  `src/app/api/v1/[...path]/route.ts` relaie vers `WAMI_API_URL` avec le jeton de l'agent
-  (cookie httpOnly signé), via `src/app/api/_proxy/forward.ts`.
-- Sans `WAMI_API_URL`, la même route répond avec le faux backend `src/app/api/_proxy/mock`
-  (données en mémoire, remises à zéro au redémarrage). Il applique les mêmes droits par rôle
-  que le vrai backend devra appliquer.
+  `src/app/api/v1/[...path]/route.ts` relaie vers `WAMI_API_URL` (`/v1/x` devient `/api/x`) avec le jeton
+  de l'agent (cookie httpOnly signé). Le relais déplie l'enveloppe `{ success, data }` du backend et
+  normalise les erreurs en `{ message, code }`.
+- **Connexion** : téléphone + mot de passe (`POST /api/admin/login`). Les droits viennent des permissions
+  du backend (`src/shared/auth/permissions.ts`, table `PERMISSION_MAP`), pas des 4 rôles de démonstration.
+- **Routes réelles et routes mock** : `src/app/api/_proxy/backend/declared.ts` liste les routes que le backend
+  expose. Une route non déclarée reste servie par le faux backend (`app/api/_proxy/mock`), même avec
+  `WAMI_API_URL`. Le faux backend renvoie, pour les routes réelles, le même format que le vrai backend.
+- **Routes à implémenter côté backend** : `src/shared/config/missing-routes.ts` liste, écran par écran, ce
+  qui manque ; chaque écran concerné affiche un encart « Données fictives ». Quand une route existe, on la
+  déclare dans `declared.ts` et on la retire de `missing-routes.ts`.
+- Les montants sont en FCFA entiers. **Exception** : les plans d'abonnement du backend sont en centimes ;
+  la conversion est dans `features/subscription-plans/domain/plan.ts`.
 - Tous les endpoints consommés sont centralisés dans `src/shared/config/api-routes.ts`.
-  **Chemins et formats JSON : à valider avec l'équipe backend.**
-- Connexion réelle attendue : `POST /v1/admin/auth/login` `{ email, code }` → `{ token, user }` (à valider).
 
 > `_proxy` est un dossier privé de l'App Router (préfixe `_`) : il regroupe le code du proxy sans
 > créer de route. L'URL publique est `/api/v1/...`.

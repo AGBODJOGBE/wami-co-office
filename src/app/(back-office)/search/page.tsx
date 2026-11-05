@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SearchView } from "@/features/search";
+import { MissingRoutes } from "@/shared/ui/missing-routes";
 import { Loading } from "@/shared/ui/primitives";
 
 export const metadata: Metadata = { title: "Recherche" };
@@ -10,6 +11,7 @@ export default function Page() {
   return (
     <Suspense fallback={<Loading />}>
       <SearchView />
+      <MissingRoutes area="search" />
     </Suspense>
   );
 }

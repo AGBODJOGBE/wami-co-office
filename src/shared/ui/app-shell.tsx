@@ -86,7 +86,7 @@ function Sidebar() {
             <span className="flex size-[34px] items-center justify-center rounded-full bg-line text-xs font-bold">{initials(user.name)}</span>
             <span className="flex min-w-0 flex-1 flex-col">
               <b className="truncate text-[13px]">{user.name}</b>
-              <span className="text-xs text-muted">{ROLE_LABELS[user.role]}</span>
+              <span className="text-xs text-muted">{user.roleName ?? ROLE_LABELS[user.role]}</span>
             </span>
             <Button
               tone="ghost"

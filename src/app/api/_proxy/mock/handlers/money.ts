@@ -1,10 +1,56 @@
 import "server-only";
 import { audit, db, newId } from "../db";
-import { find, matches, num, replace, requireText, str } from "../helpers";
+import { find, num, replace, requireText, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
-import type { Campaign, PromoCode, ReferralProgram } from "../seed-types";
+import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Plans d'abonnement de démonstration, prix en CENTIMES comme le backend (150 000 F = 15 000 000). */
+const mockPlans: Array<{ planId: string; name: string; description: string | null; durationInDays: number; deliveryQuota: number | null; onQuotaExhausted: string; price: number; isActive: boolean }> = [
+  { planId: "sp-1", name: "Starter 30 jours", description: "Pour les petits commerces", durationInDays: 30, deliveryQuota: 100, onQuotaExhausted: "BLOCK_NEW_ORDERS", price: 15_000_000, isActive: true },
+  { planId: "sp-2", name: "Pro illimité", description: null, durationInDays: 30, deliveryQuota: null, onQuotaExhausted: "BILL_PER_UNIT", price: 45_000_000, isActive: true },
+];
+
+const mockAffiliateConfig = { defaultCommissionRate: 0.1, minPayoutAmount: 5000 };
+const mockHeld = new Set<string>();
+const mockCancelled = new Set<string>();
+
+const mockWalletConfig: Record<string, unknown> = { consolidationEnabled: true, consolidationFeeRate: 0.01, consolidationMinAmount: 1000, p2pTransferEnabled: true, p2pTransferFeeRate: 0.01, p2pMinimumAmount: 500, withdrawalMinMobileMoney: 1000, withdrawalMinBankTransfer: 10_000, grantMaxPerBeneficiary: 50_000, grantMaxTotal: 5_000_000, grantMaxBeneficiaries: 2000 };
+const mockWelcomeBonus = { bonusAmountFcfa: 5000, maxEligibleDrivers: 500, consumedCount: 212, isActive: true };
+
+const grantIds = (body: Record<string, unknown>): string[] => {
+  const t = body.targeting as { beneficiaryIds?: unknown } | undefined;
+  return Array.isArray(t?.beneficiaryIds) ? t.beneficiaryIds.filter((x): x is string => typeof x === "string") : [];
+};
+
+/** Dotations de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockGrants: Array<{ campaignId: string; audience: string; label: string; balanceType: string; amountPerBeneficiary: number; beneficiaryCount: number; totalAmount: number; status: string; createdBy: string; createdAt: string; approvedBy: string | null; creditedCount: number; failedCount: number }> = [
+  { campaignId: "gr-1", audience: "DRIVER", label: "Geste commercial Tabaski", balanceType: "BONUS", amountPerBeneficiary: 2000, beneficiaryCount: 120, totalAmount: 240_000, status: "PENDING_APPROVAL", createdBy: "agent-operations", createdAt: new Date().toISOString(), approvedBy: null, creditedCount: 0, failedCount: 0 },
+  { campaignId: "gr-2", audience: "PASSENGER", label: "Compensation incident réseau", balanceType: "BONUS", amountPerBeneficiary: 500, beneficiaryCount: 300, totalAmount: 150_000, status: "PARTIALLY_FAILED", createdBy: "agent-operations", createdAt: new Date().toISOString(), approvedBy: "agent-finance", creditedCount: 292, failedCount: 8 },
+];
+
+/** Retraits de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockWithdrawals: Array<{ withdrawalId: string; walletId: string; ownerName: string; ownerPhone: string; amount: number; method: string; recipientDetails: { phone?: string }; status: string; reference: string | null; failureReason: string | null; rejectionReason: string | null; sourceBalance: string; affiliateSummary: { outstandingPayable: number } | null; createdAt: string }> = [
+  { withdrawalId: "wd-1", walletId: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerPhone: "+229 01 97 00 00 01", amount: 25_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 97 00 00 01" }, status: "AWAITING_APPROVAL", reference: null, failureReason: null, rejectionReason: null, sourceBalance: "MAIN", affiliateSummary: null, createdAt: new Date().toISOString() },
+  { withdrawalId: "wd-2", walletId: "w-1", ownerName: "[Apporteur] Théophile K.", ownerPhone: "+229 01 96 00 20 20", amount: 40_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 96 00 20 20" }, status: "AWAITING_APPROVAL", reference: null, failureReason: null, rejectionReason: null, sourceBalance: "AFFILIATE", affiliateSummary: { outstandingPayable: 40_000 }, createdAt: new Date().toISOString() },
+  { withdrawalId: "wd-3", walletId: "w-4", ownerName: "Le Palmier", ownerPhone: "+229 01 •• •• 42", amount: 300_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 •• •• 42" }, status: "COMPLETED", reference: "MOMO-7781", failureReason: null, rejectionReason: null, sourceBalance: "MAIN", affiliateSummary: null, createdAt: new Date().toISOString() },
+];
+
+/** Configurations de parrainage de démonstration (état en mémoire, comme le reste du faux backend). */
+const referralConfigs: Array<{
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  rewardMatrix: Array<{ referrerType: string; referredType: string; rewardMode: "FIXED" | "PERCENTAGE"; referrerAmount: number; referredAmount: number; referrerCap?: number | null; referredCap?: number | null }>;
+  limits?: { perType: Array<{ referredType: string; maxPerMonth: number; maxPerDay: number }>; maxReferralsPerDayGlobal: number | null };
+  validationConditions: { expirationDays: number | null; perType?: Array<{ referredType: string; actionsRequired: number; actionType: string }> };
+  activatedAt: string | null;
+}> = [
+  { id: "rc-1", name: "Lancement passagers", description: "Parrainage passager → passager", isActive: true, rewardMatrix: [{ referrerType: "PASSENGER", referredType: "PASSENGER", rewardMode: "FIXED", referrerAmount: 1000, referredAmount: 500 }], validationConditions: { expirationDays: 30 }, activatedAt: new Date().toISOString() },
+  { id: "rc-2", name: "Chauffeurs (brouillon)", description: null, isActive: false, rewardMatrix: [{ referrerType: "DRIVER_STANDARD", referredType: "DRIVER_STANDARD", rewardMode: "FIXED", referrerAmount: 5000, referredAmount: 0 }], validationConditions: { expirationDays: null }, activatedAt: null },
+];
 
 /** Support, portefeuilles, finances, promos, affiliation, parrainage, notifications. */
 export const moneyRoutes: MockRoute[] = [
@@ -39,22 +85,215 @@ export const moneyRoutes: MockRoute[] = [
   }),
 
   // ── Portefeuilles ──
-  route("GET", `${A}/wallets`, "wallet", ({ query }) => {
-    const q = query.get("q") ?? "";
-    return db().wallets.filter((w) => matches(q, w.ownerName, w.phone));
+  // Même contrat que le backend WAMI : wallets, transactions, blocage des retraits.
+  route("GET", `${A}/wallets`, "wallet", () => {
+    const wallets = db().wallets.map((w) => ({
+      walletId: w.id,
+      walletType: w.ownerType === "client" ? "PAYMENT" : w.ownerType === "platform" ? "PLATFORM" : "EARNINGS",
+      totalBalance: w.balance,
+      status: w.status === "active" ? "ACTIVE" : "SUSPENDED",
+      withdrawalsBlocked: w.withdrawalsBlocked,
+      withdrawalsBlockedReason: w.withdrawalsBlockedReason,
+      ownerName: w.ownerName,
+      ownerPhone: w.phone,
+    }));
+    return { wallets, total: wallets.length };
   }),
-  route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
+  route("GET", `${A}/transactions`, "wallet", ({ query }) => {
+    const w = db().wallets.find((x) => x.id === query.get("walletId"));
+    const transactions = (w ? w.movements : db().wallets.flatMap((x) => x.movements)).map((m) => ({
+      transactionId: m.id,
+      direction: m.amount < 0 ? "DEBIT" : "CREDIT",
+      amount: Math.abs(m.amount),
+      description: m.label,
+      createdAt: m.at,
+    }));
+    return { transactions, total: transactions.length, page: 1, limit: 20 };
+  }),
+  route("PATCH", `${A}/wallets/:id/withdrawals/block`, "wallet", ({ params, body, user }) => {
     const w = find(db().wallets, (x) => x.id === params.id);
+    const reason = str(body, "reason");
+    requireText(reason, 1, "reason is required");
+    audit(user, "Argent", `A bloqué les retraits de ${w.ownerName} · ${reason}`);
+    replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: true, withdrawalsBlockedReason: reason });
+    return { walletId: w.id, withdrawalsBlocked: true, withdrawalsBlockedReason: reason, withdrawalsBlockedAt: new Date().toISOString(), withdrawalsBlockedBy: user.id };
+  }),
+  route("PATCH", `${A}/wallets/:id/withdrawals/unblock`, "wallet", ({ params, user }) => {
+    const w = find(db().wallets, (x) => x.id === params.id);
+    audit(user, "Argent", `A débloqué les retraits de ${w.ownerName}`);
+    replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: false, withdrawalsBlockedReason: null });
+    return { walletId: w.id, withdrawalsBlocked: false, withdrawalsBlockedReason: null, withdrawalsBlockedAt: null, withdrawalsBlockedBy: null };
+  }),
+
+  // Retraits (contrat du backend WAMI : /api/admin/withdrawals, PATCH …/approve|reject).
+  route("GET", `${A}/withdrawals`, "withdrawals", ({ query }) => {
+    const status = query.get("status");
+    const withdrawals = mockWithdrawals.filter((w) => !status || w.status === status);
+    return { withdrawals, total: withdrawals.length, page: 1, limit: 100 };
+  }),
+  route("PATCH", `${A}/withdrawals/:id/approve`, "withdrawals", ({ params, user }) => {
+    const w = find(mockWithdrawals, (x) => x.withdrawalId === params.id);
+    if (w.status !== "AWAITING_APPROVAL") throw invalid("Withdrawal is not awaiting approval");
+    w.status = "PROCESSING";
+    audit(user, "Argent", `A approuvé le retrait de ${w.amount} F (${w.ownerName})`);
+    return { withdrawalId: w.withdrawalId, status: w.status };
+  }),
+  route("PATCH", `${A}/withdrawals/:id/reject`, "withdrawals", ({ params, body, user }) => {
+    const w = find(mockWithdrawals, (x) => x.withdrawalId === params.id);
+    const reason = str(body, "reason");
+    requireText(reason, 1, "reason is required");
+    if (w.status !== "AWAITING_APPROVAL") throw invalid("Withdrawal is not awaiting approval");
+    w.status = "REJECTED";
+    w.rejectionReason = reason;
+    audit(user, "Argent", `A rejeté le retrait de ${w.amount} F (${w.ownerName}) · ${reason}`);
+    return { withdrawalId: w.withdrawalId, status: w.status, refundedAmount: w.amount };
+  }),
+
+  // Dotations (contrat du backend WAMI : /api/admin/wallet/grants…).
+  route("GET", `${A}/wallet/grants`, "wallet-grants", ({ query }) => {
+    const status = query.get("status");
+    const campaigns = mockGrants.filter((g) => !status || g.status === status);
+    return { campaigns, total: campaigns.length, page: 1, limit: 100 };
+  }),
+  route("POST", `${A}/wallet/grants/preview`, "wallet-grants", ({ body }) => {
+    const ids = grantIds(body);
+    const amount = num(body, "amountPerBeneficiary");
+    return { beneficiaryCount: ids.length, totalAmount: ids.length * amount, unknownIds: [], beneficiariesInOverdraft: 0, amountAbsorbedByDebt: 0, sample: [], capViolations: amount > 50_000 ? [{ cap: "maxPerBeneficiary", limit: 50_000, actual: amount }] : [], notes: [] };
+  }),
+  route("POST", `${A}/wallet/grants`, "wallet-grants", ({ body, user }) => {
+    const ids = grantIds(body);
+    const amount = num(body, "amountPerBeneficiary");
+    const label = str(body, "label");
+    if (!label || ids.length === 0 || !(amount > 0)) throw invalid("label, amountPerBeneficiary et bénéficiaires obligatoires");
+    const g = { campaignId: newId("gr"), audience: str(body, "audience"), label, balanceType: str(body, "balanceType"), amountPerBeneficiary: amount, beneficiaryCount: ids.length, totalAmount: ids.length * amount, status: "PENDING_APPROVAL", createdBy: user.id, createdAt: new Date().toISOString(), approvedBy: null, creditedCount: 0, failedCount: 0 };
+    mockGrants.unshift(g);
+    audit(user, "Argent", `A demandé la dotation « ${label} » (${g.totalAmount} F)`);
+    return { campaignId: g.campaignId, status: g.status, beneficiaryCount: g.beneficiaryCount, totalAmount: g.totalAmount };
+  }),
+  ...(["approve", "reject", "cancel", "retry-failed"] as const).map((action) =>
+    route("POST", `${A}/wallet/grants/:id/${action}`, "wallet-grants", ({ params, body, user }) => {
+      const g = find(mockGrants, (x) => x.campaignId === params.id);
+      if (action === "reject") requireText(str(body, "reason"), 1, "reason is required");
+      if ((action === "approve" || action === "reject") && g.status !== "PENDING_APPROVAL") throw new MockError(409, "La dotation n’est plus à approuver.", "conflict");
+      if (action === "approve" && g.createdBy === user.id) throw new MockError(409, "Le demandeur ne peut pas approuver sa propre dotation.", "conflict");
+      if (action === "retry-failed" && g.status !== "PARTIALLY_FAILED") throw new MockError(409, "Aucune ligne échouée.", "conflict");
+      g.status = action === "approve" ? "COMPLETED" : action === "reject" ? "REJECTED" : action === "cancel" ? "CANCELLED" : "COMPLETED";
+      if (action === "approve" || action === "retry-failed") {
+        g.creditedCount = g.beneficiaryCount;
+        g.failedCount = 0;
+        g.approvedBy = user.id;
+      }
+      audit(user, "Argent", `Dotation « ${g.label} » : ${action}`);
+      return { campaignId: g.campaignId, status: g.status };
+    }),
+  ),
+
+  // Revenus, créances, dettes, règles des portefeuilles (contrat du backend WAMI).
+  route("GET", `${A}/platform/revenue`, "receivables", () => ({
+    walletId: "platform",
+    balance: 4_200_000,
+    period: { from: null, to: null },
+    breakdown: [
+      { source: "COMMISSION_REVENUE", label: "Courses", total: 1_450_000 },
+      { source: "B2C_COMMISSION_REVENUE", label: "Livraisons B2C", total: 620_000 },
+      { source: "CONTRACT_INSTALLMENT_REVENUE", label: "Contrats", total: 880_000 },
+    ],
+    totalRevenue: 2_950_000,
+    outflows: {
+      breakdown: [
+        { source: "AFFILIATE_COMMISSION_EXPENSE", label: "Commissions d’affiliation", category: "DEFINITIVE_EXPENSE", total: 120_000 },
+        { source: "BONUS_CREDIT", label: "Bonus et dotations", category: "DEFINITIVE_EXPENSE", total: 310_000 },
+        { source: "WITHDRAWAL", label: "Retraits des partenaires", category: "TREASURY_MOVEMENT", total: 1_900_000 },
+      ],
+      totalsByCategory: [],
+      total: 2_330_000,
+    },
+    netResult: 2_520_000,
+  })),
+  route("GET", `${A}/finance/receivables-overview`, "receivables", () => ({
+    drivers: [
+      { driverId: "drv-3", driverName: "Marius K.", contractReceivable: 120_000, commissionReceivable: 6_700, totalReceivable: 126_700, oldestReceivableAt: new Date(Date.now() - 40 * 86_400_000).toISOString() },
+      { driverId: "drv-5", driverName: "Bio C.", contractReceivable: 0, commissionReceivable: 14_300, totalReceivable: 14_300, oldestReceivableAt: new Date(Date.now() - 9 * 86_400_000).toISOString() },
+    ],
+    totals: { contractReceivable: 120_000, commissionReceivable: 21_000, totalReceivable: 141_000 },
+    page: 1, limit: 100, total: 2,
+  })),
+  route("GET", `${A}/drivers/commission-debts`, "receivables", () => ({
+    drivers: [{ driverId: "drv-3", walletId: "w-3", driverName: "Marius K.", driverPhone: "+229 01 97 00 00 03", driverStatus: "OFFLINE", debtAmount: 6_700, mainBalance: -6_700, bonusBalance: 0, referralBalance: 0, updatedAt: new Date().toISOString() }],
+    total: 1, totalDebtAmount: 6_700, page: 1, limit: 100,
+  })),
+  route("GET", `${A}/drivers/:id/commission-debts`, "receivables", ({ params }) => ({
+    driverId: params.id, walletId: "w-3", driverName: "Marius K.", driverPhone: "+229 01 97 00 00 03", debtAmount: 6_700, currentBalance: -6_700,
+    items: [{ transactionId: "tx-d1", source: "RIDE", entityId: "r1", entityNumber: "WMI-2RT9B", commissionAmount: 3_400, description: "Commission course en espèces", date: new Date(Date.now() - 2 * 86_400_000).toISOString() }, { transactionId: "tx-d2", source: "RIDE", entityId: "r2", entityNumber: "WMI-9KD21", commissionAmount: 3_300, description: "Commission course en espèces", date: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
+    total: 2, page: 1, limit: 50,
+  })),
+  route("GET", `${A}/wallet-config`, "wallet-config", () => mockWalletConfig),
+  route("PATCH", `${A}/wallet-config`, "wallet-config", ({ body, user }) => {
+    Object.assign(mockWalletConfig, body);
+    audit(user, "Réglages", "Règles des portefeuilles modifiées");
+    return mockWalletConfig;
+  }),
+  route("GET", `${A}/driver-welcome-bonus`, "wallet-config", () => ({ ...mockWelcomeBonus, remainingSlots: mockWelcomeBonus.maxEligibleDrivers - mockWelcomeBonus.consumedCount })),
+  route("PATCH", `${A}/driver-welcome-bonus`, "wallet-config", ({ body, user }) => {
+    for (const k of ["bonusAmountFcfa", "maxEligibleDrivers"] as const) if (typeof body[k] === "number") mockWelcomeBonus[k] = body[k];
+    if (typeof body.isActive === "boolean") mockWelcomeBonus.isActive = body.isActive;
+    audit(user, "Réglages", "Bonus de bienvenue modifié");
+    return { ...mockWelcomeBonus, remainingSlots: mockWelcomeBonus.maxEligibleDrivers - mockWelcomeBonus.consumedCount };
+  }),
+
+  // Paiements (contrat du backend WAMI : /api/admin/payments/intents).
+  route("GET", `${A}/payments/intents`, "payments", ({ query }) => {
+    const provider = query.get("provider");
+    const now = Date.now();
+    const intents = [
+      { paymentIntentId: "pi-1", walletId: "w-1", ownerName: "[Client] Gisèle A.", ownerPhone: "+229 01 97 11 00 01", walletType: "PAYMENT", operationType: "RECHARGE", status: "SUCCESS", provider: "MTN_MOMO", amount: 5000, phone: "+229 01 97 11 00 01", failureReason: null, createdAt: new Date(now - 3_600_000).toISOString(), updatedAt: new Date(now).toISOString() },
+      { paymentIntentId: "pi-2", walletId: "w-5", ownerName: "[Client] Compte suspect", ownerPhone: "+229 01 97 11 00 09", walletType: "PAYMENT", operationType: "RECHARGE", status: "FAILED", provider: "FEDAPAY", amount: 20_000, phone: null, failureReason: "Solde Mobile Money insuffisant", createdAt: new Date(now - 7_200_000).toISOString(), updatedAt: new Date(now).toISOString() },
+      { paymentIntentId: "pi-3", walletId: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerPhone: "+229 01 97 00 00 01", walletType: "EARNINGS", operationType: "RECHARGE", status: "PENDING", provider: "FEDAPAY", amount: 10_000, phone: null, failureReason: null, createdAt: new Date(now - 600_000).toISOString(), updatedAt: new Date(now).toISOString() },
+    ].filter((p) => !provider || p.provider === provider);
+    return { intents, total: intents.length };
+  }),
+
+  // Plans d'abonnement (contrat du backend WAMI : /api/admin/subscription-plans ; prix en CENTIMES).
+  route("GET", `${A}/subscription-plans`, "subscription-plans", ({ query }) => mockPlans.filter((p) => query.get("includeInactive") === "true" || p.isActive)),
+  route("POST", `${A}/subscription-plans`, "subscription-plans", ({ body, user }) => {
+    const name = str(body, "name");
+    if (!name) throw invalid("Plan name is required");
+    if (mockPlans.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw invalid("A plan with this name already exists");
+    if (!Number.isInteger(num(body, "price")) || num(body, "price") < 0) throw invalid("Plan price must be a non-negative integer amount in XOF centimes");
+    const p = { planId: newId("sp"), name, description: typeof body.description === "string" ? body.description : null, durationInDays: num(body, "durationInDays"), deliveryQuota: typeof body.deliveryQuota === "number" ? body.deliveryQuota : null, onQuotaExhausted: str(body, "onQuotaExhausted") || "BLOCK_NEW_ORDERS", price: num(body, "price"), isActive: true };
+    mockPlans.push(p);
+    audit(user, "Argent", `Plan d’abonnement « ${name} » créé`);
+    return { planId: p.planId };
+  }),
+  route("PATCH", `${A}/subscription-plans/:id`, "subscription-plans", ({ params, body, user }) => {
+    const p = find(mockPlans, (x) => x.planId === params.id);
+    if (typeof body.name === "string" && body.name.trim()) p.name = body.name.trim();
+    if (typeof body.description === "string" || body.description === null) p.description = body.description as string | null;
+    if (typeof body.durationInDays === "number") p.durationInDays = body.durationInDays;
+    if (typeof body.deliveryQuota === "number" || body.deliveryQuota === null) p.deliveryQuota = body.deliveryQuota as number | null;
+    if (typeof body.onQuotaExhausted === "string") p.onQuotaExhausted = body.onQuotaExhausted;
+    if (typeof body.price === "number") p.price = body.price;
+    audit(user, "Argent", `Plan « ${p.name} » modifié`);
+    return { planId: p.planId };
+  }),
+  ...(["deactivate", "reactivate"] as const).map((action) =>
+    route("PATCH", `${A}/subscription-plans/:id/${action}`, "subscription-plans", ({ params, user }) => {
+      const p = find(mockPlans, (x) => x.planId === params.id);
+      p.isActive = action === "reactivate";
+      audit(user, "Argent", `Plan « ${p.name} » : ${action}`);
+      return { planId: p.planId, isActive: p.isActive };
+    }),
+  ),
+
+  // Route absente du backend (faux backend) : ajustement manuel.
+  route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
+    const w = find(db().wallets, (x) => x.id === params.id, "Route absente du backend : l’ajustement ne marche que sur les portefeuilles fictifs.");
     const amount = num(body, "amount");
     const reason = str(body, "reason");
     requireText(reason, 10, "Motif obligatoire.");
     if (!Number.isInteger(amount) || amount === 0) throw invalid("Montant invalide.");
     audit(user, "Argent", `Ajustement de ${amount} F sur le portefeuille de ${w.ownerName} · ${reason}`);
-    return replace(db().wallets, (x) => x.id === w.id, {
-      ...w,
-      balance: w.balance + amount,
-      movements: [{ id: newId("wm"), at: new Date().toISOString(), label: `Ajustement : ${reason}`, amount }, ...w.movements],
-    });
+    return replace(db().wallets, (x) => x.id === w.id, { ...w, balance: w.balance + amount, movements: [{ id: newId("wm"), at: new Date().toISOString(), label: `Ajustement : ${reason}`, amount }, ...w.movements] });
   }),
 
   // ── Finances ──
@@ -78,47 +317,238 @@ export const moneyRoutes: MockRoute[] = [
     return db().batch;
   }),
 
-  // ── Codes promo ──
-  route("GET", `${A}/promo-codes`, "promo-codes", () => db().promos),
+  // ── Codes promo ── (contrat du backend WAMI : /api/admin/promo-codes, PATCH …/:id/toggle)
+  route("GET", `${A}/promo-codes`, "promo-codes", () =>
+    db().promos.map((p) => ({
+      id: p.id,
+      code: p.code,
+      campaignName: p.description,
+      displayText: p.description,
+      discountType: p.kind === "percent" ? "PERCENTAGE" : "FIXED_AMOUNT",
+      discountValue: p.value,
+      maxDiscountAmount: p.cap,
+      startDate: p.startsAt,
+      endDate: p.endsAt,
+      maxTotalUsages: p.maxUses,
+      currentUsages: p.used,
+      vertical: p.services.every((s) => s === "delivery" || s === "meal") ? "DELIVERY_B2C" : "TRANSPORT",
+      fundedBy: p.fundedBy === "wami" ? "WAMI" : "PARTNER",
+      usageNumber: p.firstOrderOnly ? 1 : null,
+      isActive: p.active,
+    })),
+  ),
   route("POST", `${A}/promo-codes`, "promo-codes", ({ body, user }) => {
-    const p = body as unknown as PromoCode;
-    if (db().promos.some((x) => x.code === p.code)) throw invalid("Ce code existe déjà.");
-    db().promos.unshift(p);
-    audit(user, "Argent", `A créé le code promo ${p.code}`);
-    return p;
+    const code = str(body, "code");
+    if (db().promos.some((x) => x.code === code)) throw invalid("Ce code existe déjà.");
+    db().promos.unshift({
+      id: code,
+      code,
+      description: str(body, "displayText"),
+      kind: body.discountType === "PERCENTAGE" ? "percent" : "fixed",
+      value: num(body, "discountValue"),
+      cap: typeof body.maxDiscountAmount === "number" ? body.maxDiscountAmount : null,
+      maxUses: num(body, "maxTotalUsages"),
+      used: 0,
+      services: body.vertical === "DELIVERY_B2C" ? ["delivery"] : ["ride"],
+      startsAt: str(body, "startDate"),
+      endsAt: str(body, "endDate"),
+      fundedBy: body.fundedBy === "WAMI" ? "wami" : "shared",
+      firstOrderOnly: body.usageNumber === 1,
+      active: body.isActive !== false,
+    });
+    audit(user, "Argent", `A créé le code promo ${code}`);
+    return { promoCodeId: code };
   }),
-  route("PATCH", `${A}/promo-codes/:code`, "promo-codes", ({ params, body, user }) => {
-    const p = find(db().promos, (x) => x.code === params.code);
-    const active = body.active === true;
-    audit(user, "Argent", `${active ? "A activé" : "A désactivé"} le code ${p.code}`);
-    return replace(db().promos, (x) => x.code === p.code, { ...p, active });
+  route("PATCH", `${A}/promo-codes/:id/toggle`, "promo-codes", ({ params, user }) => {
+    const p = find(db().promos, (x) => x.id === params.id);
+    audit(user, "Argent", `A ${p.active ? "désactivé" : "activé"} le code ${p.code}`);
+    replace(db().promos, (x) => x.id === p.id, { ...p, active: !p.active });
+    return { isActive: !p.active };
   }),
 
   // ── Affiliation ──
-  route("GET", `${A}/affiliates`, "affiliate", () => db().affiliates),
+  // Même contrat que le backend WAMI : /api/admin/affiliates (le versement passe par les retraits).
+  route("GET", `${A}/affiliates`, "affiliate", () =>
+    db().affiliates.map((a) => {
+      const accrued = a.activations * a.ratePerActivation;
+      return {
+        affiliateId: a.id,
+        name: a.name,
+        phoneNumber: a.phone,
+        socialNetwork: a.kind === "agency" ? "Agence" : "Instagram",
+        audienceSize: null,
+        status: a.status === "active" ? "ACTIVE" : a.status === "suspended" ? "SUSPENDED" : "CLOSED",
+        commissionRate: a.commissionRate ?? null,
+        effectiveCommissionRate: a.commissionRate ?? 0.1,
+        totalPayable: accrued,
+        totalPaid: a.paid,
+        outstandingPayable: Math.max(0, accrued - a.paid),
+        codes: [{ code: a.code, currentUsages: a.activations, isCurrentlyUsable: a.status === "active" }],
+      };
+    }),
+  ),
+  ...(["suspend", "reactivate", "close", "reopen"] as const).map((action) =>
+    route("POST", `${A}/affiliates/:id/${action}`, "affiliate", ({ params, body, user }) => {
+      const a = find(db().affiliates, (x) => x.id === params.id);
+      if (action === "suspend" && body.mode !== "PAUSE" && body.mode !== "SANCTION") throw invalid("mode doit valoir 'PAUSE' ou 'SANCTION'");
+      if ((action === "close" || action === "reopen" || (action === "suspend" && body.mode === "SANCTION")) && !str(body, "reason").trim()) throw invalid("reason est obligatoire");
+      const status = action === "suspend" ? "suspended" : action === "close" ? "closed" : "active";
+      audit(user, "Argent", `Affilié ${a.name} : ${action}`);
+      replace(db().affiliates, (x) => x.id === a.id, { ...a, status });
+      return { affiliateId: a.id, status: status.toUpperCase() };
+    }),
+  ),
+  // Configuration, éligibilité, création, relevé, commissions et commissions ignorées (contrat du backend WAMI).
+  route("GET", `${A}/affiliates/config`, "affiliate", () => mockAffiliateConfig),
+  route("PATCH", `${A}/affiliates/config`, "affiliate", ({ body, user }) => {
+    if (typeof body.defaultCommissionRate === "number") mockAffiliateConfig.defaultCommissionRate = body.defaultCommissionRate;
+    if (typeof body.minPayoutAmount === "number") mockAffiliateConfig.minPayoutAmount = body.minPayoutAmount;
+    audit(user, "Réglages", "Règles d’affiliation modifiées");
+    return mockAffiliateConfig;
+  }),
+  route("GET", `${A}/affiliates/eligibility`, "affiliate", ({ query }) => {
+    const phone = (query.get("phoneNumber") ?? "").replace(/\D/g, "");
+    if (db().affiliates.some((a) => a.phone.replace(/\D/g, "") === phone)) return { status: "ALREADY_AFFILIATE", userId: null, displayName: null };
+    if (phone.endsWith("0000")) return { status: "NO_ACCOUNT", userId: null, displayName: null };
+    return { status: "ELIGIBLE", userId: "u-new", displayName: "Nouvelle personne" };
+  }),
+  route("POST", `${A}/affiliates`, "affiliate", ({ body, user }) => {
+    if (!str(body, "phoneNumber") || !str(body, "name") || !str(body, "socialNetwork")) throw invalid("phoneNumber, name et socialNetwork obligatoires");
+    const a = { id: newId("af"), name: str(body, "name"), kind: "individual" as const, phone: str(body, "phoneNumber"), code: str(body, "name").toUpperCase().replace(/\W/g, "").slice(0, 8), activations: 0, pending: 0, ratePerActivation: 5000, paid: 0, status: "active" as const, commissionRate: typeof body.commissionRate === "number" ? body.commissionRate : null };
+    db().affiliates.push(a);
+    audit(user, "Argent", `Affilié ${a.name} créé`);
+    return { userId: "u-new", affiliateId: a.id, walletId: "w-new", name: a.name, status: "ACTIVE", message: "Affiliate profile created" };
+  }),
+  route("GET", `${A}/affiliates/commission-skips`, "affiliate", () => ({
+    items: [{ skipId: "sk-1", affiliateId: "af-2", promoCodeId: "p1", userId: "u1", sourceType: "RIDE", sourceId: "r1", vertical: "TRANSPORT", reason: "NEGATIVE_MARGIN", platformCommission: 120, potentialAmount: 300, maxAllowedAmount: 120, rawAmount: 300, wasCapped: true, cappingShortfall: 180, appliedAt: new Date().toISOString(), recordedAt: new Date().toISOString(), resolvedAt: null, resolvedCommissionId: null }],
+    pagination: { total: 1, limit: 50, offset: 0 },
+  })),
+  route("GET", `${A}/affiliates/:id`, "affiliate", ({ params }) => {
+    const a = find(db().affiliates, (x) => x.id === params.id, "Affilié introuvable.");
+    const accrued = a.activations * a.ratePerActivation;
+    return {
+      affiliateId: a.id, name: a.name, phoneNumber: a.phone, status: a.status.toUpperCase(), suspensionReason: a.status === "suspended" ? "Pause demandée" : null,
+      statement: {
+        affiliateId: a.id,
+        byStatus: [{ status: "ACCRUED", count: 2, totalAmount: accrued, totalPayableAmount: accrued, totalPaidAmount: a.paid }],
+        totals: { totalAccrued: accrued, totalPayable: accrued, totalPaid: a.paid, outstandingPayable: Math.max(0, accrued - a.paid), heldOutstanding: mockHeld.size ? 2000 : 0, totalCancelled: 0 },
+        minPayoutAmount: mockAffiliateConfig.minPayoutAmount, walletBalance: { affiliateBalance: Math.max(0, accrued - a.paid) },
+        lines: [
+          { commissionId: `${a.id}-c1`, sourceType: "RIDE", sourceId: "r1", amount: 2000, payableAmount: 2000, paidAmount: 0, outstandingPayableAmount: 2000, appliedRate: 0.1, rateSource: "DEFAULT", status: mockCancelled.has(`${a.id}-c1`) ? "CANCELLED" : "ACCRUED", accruedAt: new Date().toISOString(), paidAt: null, lastPayoutRef: null, held: mockHeld.has(`${a.id}-c1`) },
+          { commissionId: `${a.id}-c2`, sourceType: "DELIVERY_B2C", sourceId: "d1", amount: 1500, payableAmount: 1500, paidAmount: 1500, outstandingPayableAmount: 0, appliedRate: 0.1, rateSource: "DEFAULT", status: "PAID", accruedAt: new Date().toISOString(), paidAt: new Date().toISOString(), lastPayoutRef: "W1", held: false },
+        ],
+        pagination: { total: 2, limit: 50, offset: 0 },
+      },
+    };
+  }),
+  ...(["hold", "release", "cancel"] as const).map((action) =>
+    route("POST", `${A}/affiliates/commissions/:id/${action}`, "affiliate", ({ params, body, user }) => {
+      if (action !== "release" && !str(body, "reason").trim()) throw invalid("reason est obligatoire");
+      const id = params.id!;
+      if (action === "hold") mockHeld.add(id);
+      if (action === "release") mockHeld.delete(id);
+      if (action === "cancel") mockCancelled.add(id);
+      audit(user, "Argent", `Commission ${id} : ${action}`);
+      return { commissionId: id };
+    }),
+  ),
+
+  // Route absente du backend (faux backend) : versement direct.
   route("POST", `${A}/affiliates/:id/payouts`, "affiliate", ({ params, body, user }) => {
-    const a = find(db().affiliates, (x) => x.id === params.id);
+    const a = find(db().affiliates, (x) => x.id === params.id, "Route absente du backend : le versement ne marche que sur les affiliés fictifs.");
     const amount = num(body, "amount");
-    if (!(amount > 0) || amount > a.activations * a.ratePerActivation - a.paid) throw invalid("Montant supérieur au dû.");
-    audit(user, "Argent", `A versé ${amount} F à l’affilié ${a.name}`);
+    if (!(amount > 0)) throw invalid("Montant invalide.");
+    audit(user, "Argent", `A versé ${amount} F à ${a.name}`);
     return replace(db().affiliates, (x) => x.id === a.id, { ...a, paid: a.paid + amount });
   }),
+  route("PATCH", `${A}/affiliates/:id/commission-rate`, "affiliate", ({ params, body, user }) => {
+    const a = find(db().affiliates, (x) => x.id === params.id);
+    const rate = typeof body.commissionRate === "number" ? body.commissionRate : null;
+    if (rate !== null && (rate < 0 || rate > 1)) throw invalid("commissionRate doit être entre 0 et 1");
+    audit(user, "Argent", `Taux de commission de ${a.name} : ${rate === null ? "défaut" : rate}`);
+    replace(db().affiliates, (x) => x.id === a.id, { ...a, commissionRate: rate });
+    return { affiliateId: a.id, commissionRate: rate };
+  }),
 
-  // ── Parrainage ──
+  // Même contrat que le backend WAMI : /api/admin/referrals (+ configurations, statistiques).
+  route("GET", `${A}/referrals`, "referrals", () =>
+    db().referrals.map((r) => ({
+      referralId: r.id,
+      referrerId: r.referrerName,
+      referredUserId: r.refereeName,
+      referralCode: `REF-${r.id}`,
+      referralType: "PASSENGER",
+      status: r.status === "pending" ? "PENDING" : r.status === "rewarded" ? "VALIDATED" : "EXPIRED",
+      referrerReward: r.status === "rewarded" ? db().referralProgram.referrerReward : 0,
+      referredReward: r.status === "rewarded" ? db().referralProgram.refereeReward : 0,
+      validatedAt: r.status === "rewarded" ? r.createdAt : null,
+      createdAt: r.createdAt,
+    })),
+  ),
+  // Routes absentes du backend (faux backend) : programme simple et blocage.
   route("GET", `${A}/referrals/program`, "referrals", () => db().referralProgram),
   route("PUT", `${A}/referrals/program`, "referrals", ({ body, user }) => {
     db().referralProgram = body as unknown as ReferralProgram;
-    audit(user, "Réglages", "A modifié le programme de parrainage");
+    audit(user, "Argent", "A modifié le programme de parrainage");
     return db().referralProgram;
   }),
-  route("GET", `${A}/referrals`, "referrals", () => db().referrals),
-  route("POST", `${A}/referrals/:id/flag`, "referrals", ({ params, body, user }) => {
-    const r = find(db().referrals, (x) => x.id === params.id);
-    audit(user, "Comptes", `A bloqué le parrainage ${r.referrerName} → ${r.refereeName} · ${str(body, "reason")}`);
+  route("POST", `${A}/referrals/:id/flag`, "referrals", ({ params, user }) => {
+    const r = find(db().referrals, (x) => x.id === params.id, "Route absente du backend : le blocage ne marche que sur les parrainages fictifs.");
+    audit(user, "Argent", `Parrainage ${r.id} bloqué`);
     return replace(db().referrals, (x) => x.id === r.id, { ...r, status: "flagged" });
   }),
+  route("GET", `${A}/referrals/stats`, "referrals", () => {
+    const rows = db().referrals;
+    const rewarded = rows.filter((r) => r.status === "rewarded").length;
+    return {
+      totalReferrals: rows.length,
+      validatedReferrals: rewarded,
+      pendingReferrals: rows.filter((r) => r.status === "pending").length,
+      expiredReferrals: rows.filter((r) => r.status === "flagged").length,
+      totalRewardsGiven: rewarded * (db().referralProgram.referrerReward + db().referralProgram.refereeReward),
+    };
+  }),
+  ...(["validate", "expire"] as const).map((action) =>
+    route("POST", `${A}/referrals/:id/${action}`, "referrals", ({ params, user }) => {
+      const r = find(db().referrals, (x) => x.id === params.id);
+      if (r.status !== "pending") throw invalid("Referral is not pending");
+      audit(user, "Argent", `Parrainage ${r.id} : ${action}`);
+      replace(db().referrals, (x) => x.id === r.id, { ...r, status: action === "validate" ? "rewarded" : "flagged" });
+      return { referralId: r.id, status: action === "validate" ? "VALIDATED" : "EXPIRED" };
+    }),
+  ),
+  route("GET", `${A}/referrals/config`, "referrals", () => referralConfigs),
+  ...(["activate", "deactivate"] as const).map((action) =>
+    route("POST", `${A}/referrals/config/:id/${action}`, "referrals", ({ params, user }) => {
+      const c = find(referralConfigs, (x) => x.id === params.id);
+      audit(user, "Argent", `Configuration de parrainage « ${c.name} » : ${action}`);
+      for (const x of referralConfigs) x.isActive = action === "activate" ? x.id === c.id : x.isActive && x.id !== c.id;
+      return { id: c.id, isActive: c.isActive };
+    }),
+  ),
+  route("POST", `${A}/referrals/config`, "referrals", ({ body, user }) => {
+    const name = str(body, "name");
+    if (!name || !Array.isArray(body.rewardMatrix) || body.rewardMatrix.length !== 25) throw invalid("Reward matrix is incomplete. Missing combination(s).");
+    const c = { id: newId("rc"), name, description: typeof body.description === "string" ? body.description : null, isActive: false, rewardMatrix: body.rewardMatrix as never, limits: body.limits as never, validationConditions: body.validationConditions as never, activatedAt: null };
+    referralConfigs.push(c);
+    audit(user, "Argent", `Configuration de parrainage « ${name} » créée`);
+    return { id: c.id };
+  }),
+  route("PUT", `${A}/referrals/config/:id`, "referrals", ({ params, body, user }) => {
+    const c = find(referralConfigs, (x) => x.id === params.id);
+    if (Array.isArray(body.rewardMatrix) && body.rewardMatrix.length !== 25) throw invalid("Reward matrix is incomplete. Missing combination(s).");
+    Object.assign(c, { name: str(body, "name") || c.name, description: typeof body.description === "string" ? body.description : null, rewardMatrix: body.rewardMatrix ?? c.rewardMatrix, limits: body.limits ?? c.limits, validationConditions: body.validationConditions ?? c.validationConditions });
+    audit(user, "Argent", `Configuration de parrainage « ${c.name} » modifiée`);
+    return { id: c.id };
+  }),
+  route("DELETE", `${A}/referrals/config/:id`, "referrals", ({ params, user }) => {
+    const c = find(referralConfigs, (x) => x.id === params.id);
+    if (c.isActive) throw invalid("Cannot delete an active configuration");
+    referralConfigs.splice(referralConfigs.indexOf(c), 1);
+    audit(user, "Argent", `Configuration de parrainage « ${c.name} » supprimée`);
+    return { id: c.id };
+  }),
 
-  // ── Notifications ──
   route("GET", `${A}/notifications/campaigns`, "notifications", () => db().campaigns),
   route("POST", `${A}/notifications/campaigns`, "notifications", ({ body, user }) => {
     const draft = body as unknown as Pick<Campaign, "title" | "body" | "audience" | "channel" | "zone" | "scheduledAt">;

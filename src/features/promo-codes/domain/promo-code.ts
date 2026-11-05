@@ -11,6 +11,7 @@ export const PROMO_SERVICE_LABELS: Record<PromoService, string> = {
 };
 
 export interface PromoCode {
+  id: string;
   code: string;
   description: string;
   kind: "percent" | "fixed";

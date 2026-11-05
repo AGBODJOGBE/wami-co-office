@@ -5,7 +5,8 @@
  * `app/api/v1/[...path]/route.ts` les relaie au backend (`WAMI_API_URL`)
  * ou, sans backend, aux données fictives de `app/api/_proxy/mock`.
  *
- * Chemins et formats : À VALIDER avec l'équipe backend.
+ * Les routes marquées « réel » existent dans le backend `wami-co` (voir `app/api/_proxy/backend/declared.ts`) ;
+ * les autres sont servies par le faux backend.
  */
 const A = "/v1/admin";
 
@@ -24,13 +25,59 @@ export const API = {
     incidents: `${A}/incidents`,
     resolveIncident: (id: string) => `${A}/incidents/${id}/resolve`,
   },
+  scheduledRides: {
+    list: `${A}/scheduled-rides/manual-assignment`,
+    assign: (rideId: string) => `${A}/scheduled-rides/${rideId}/manual-assignment`,
+  },
+  users: {
+    list: `${A}/users`,
+  },
+  payments: {
+    intents: `${A}/payments/intents`,
+  },
+  pricingAdmin: {
+    profiles: `${A}/pricing/profiles`,
+    profile: (id: string) => `${A}/pricing/profiles/${id}`,
+    activateProfile: (id: string) => `${A}/pricing/profiles/${id}/activate`,
+    deactivateProfile: (id: string) => `${A}/pricing/profiles/${id}/deactivate`,
+    zones: `${A}/pricing/zones`,
+    zone: (id: string) => `${A}/pricing/zones/${id}`,
+    grid: `${A}/pricing-grid`,
+    activeGrid: `${A}/pricing-grid/active`,
+  },
+  subscriptionPlans: {
+    list: `${A}/subscription-plans`,
+    plan: (id: string) => `${A}/subscription-plans/${id}`,
+    deactivate: (id: string) => `${A}/subscription-plans/${id}/deactivate`,
+    reactivate: (id: string) => `${A}/subscription-plans/${id}/reactivate`,
+  },
+  deliveryB2c: {
+    list: `${A}/delivery`,
+    order: (id: string) => `${A}/delivery/${id}`,
+  },
+  partners: {
+    pending: `${A}/partners/pending`,
+    validate: (id: string) => `${A}/partners/${id}/validate`,
+  },
+  // Hors préfixe /admin : ces routes du backend sont montées sous /api/app-config.
+  appConfig: {
+    params: "/v1/app-config/config",
+    param: (key: string) => `/v1/app-config/config/${key}`,
+    versions: "/v1/app-config",
+    version: (appType: string, platform: string) => `/v1/app-config/${appType}/${platform}`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,
   },
   rides: {
     list: `${A}/rides`,
-    cancel: (id: string) => `${A}/rides/${id}/cancel`,
+    detail: (id: string) => `${A}/rides/${id}`,
+    status: (id: string) => `${A}/rides/${id}/status`,
+    telemetry: (id: string) => `${A}/rides/${id}/telemetry`,
+    matching: (id: string) => `${A}/rides/${id}/matching`,
+    track: (id: string) => `${A}/rides/${id}/track`,
+    guaranteeSettlement: (id: string) => `${A}/rides/${id}/guarantee-settlement`,
   },
   delivery: {
     list: `${A}/deliveries`,
@@ -52,15 +99,35 @@ export const API = {
   },
   drivers: {
     list: `${A}/drivers`,
-    status: (id: string) => `${A}/drivers/${id}/status`,
+    pending: `${A}/drivers/pending`,
+    online: `${A}/drivers/online`,
+    approve: (id: string) => `${A}/drivers/${id}/approve`,
+    type: (id: string) => `${A}/drivers/${id}/driver-type`,
+    info: (id: string) => `${A}/drivers/${id}/info`,
+    sessions: (id: string) => `${A}/drivers/${id}/sessions`,
+    connectionTime: `${A}/drivers/connection-time`,
+    suspend: (id: string) => `${A}/drivers/${id}/suspend`,
+    reactivate: (id: string) => `${A}/drivers/${id}/reactivate`,
   },
   vehicles: {
     list: `${A}/vehicles`,
     assign: (id: string) => `${A}/vehicles/${id}/assign`,
   },
   contracts: {
-    list: `${A}/lease-contracts`,
-    payments: (id: string) => `${A}/lease-contracts/${id}/payments`,
+    list: `${A}/contracts`,
+    detail: (id: string) => `${A}/contracts/${id}`,
+    installments: (id: string) => `${A}/contracts/${id}/installments`,
+    manualPayment: (id: string) => `${A}/contracts/${id}/manual-payment`,
+    suspend: (id: string) => `${A}/contracts/${id}/suspend`,
+    resume: (id: string) => `${A}/contracts/${id}/resume`,
+    break: (id: string) => `${A}/contracts/${id}/break`,
+    unblockDriver: (driverId: string) => `${A}/contracts/drivers/${driverId}/unblock`,
+    repaymentMode: (id: string) => `${A}/contracts/${id}/repayment-mode`,
+    revenueShareRate: (id: string) => `${A}/contracts/${id}/revenue-share-rate`,
+    withholdings: (id: string) => `${A}/contracts/${id}/revenue-share/withholdings`,
+    kpis: `${A}/contracts/dashboard/kpis`,
+    auditLogs: `${A}/contracts/audit-logs`,
+    revenueShareAlerts: `${A}/contracts/revenue-share/alerts`,
   },
   documents: {
     dossiers: `${A}/verifications`,
@@ -68,6 +135,16 @@ export const API = {
     activate: (dossierId: string) => `${A}/verifications/${dossierId}/activate`,
   },
   driverBonus: {
+    tierConfigs: `${A}/driver-bonus/config`,
+    activityConfigs: `${A}/driver-bonus/activity-config`,
+    qualityConfigs: `${A}/driver-bonus/quality-config`,
+    awards: `${A}/driver-bonus/awards`,
+    activityLedger: `${A}/driver-bonus/activity-ledger`,
+    activityPayouts: `${A}/driver-bonus/activity-payouts`,
+    qualityLedger: `${A}/driver-bonus/quality-ledger`,
+    runConfig: `${A}/driver-bonus/run-config`,
+    welcomeBonus: `${A}/driver-welcome-bonus`,
+    // Absentes du backend (faux backend) : voir missing-routes.ts
     challenges: `${A}/driver-bonus/challenges`,
     challenge: (id: string) => `${A}/driver-bonus/challenges/${id}`,
   },
@@ -84,7 +161,27 @@ export const API = {
   },
   wallet: {
     list: `${A}/wallets`,
+    detail: (id: string) => `${A}/wallets/${id}`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
     adjust: (id: string) => `${A}/wallets/${id}/adjustments`,
+    blockWithdrawals: (id: string) => `${A}/wallets/${id}/withdrawals/block`,
+    unblockWithdrawals: (id: string) => `${A}/wallets/${id}/withdrawals/unblock`,
+    transactions: `${A}/transactions`,
+    withdrawals: `${A}/withdrawals`,
+    approveWithdrawal: (id: string) => `${A}/withdrawals/${id}/approve`,
+    rejectWithdrawal: (id: string) => `${A}/withdrawals/${id}/reject`,
+    platformRevenue: `${A}/platform/revenue`,
+    receivables: `${A}/finance/receivables-overview`,
+    commissionDebts: `${A}/drivers/commission-debts`,
+    driverCommissionDebts: (driverId: string) => `${A}/drivers/${driverId}/commission-debts`,
+    config: `${A}/wallet-config`,
+    grants: `${A}/wallet/grants`,
+    grantsPreview: `${A}/wallet/grants/preview`,
+    grant: (id: string) => `${A}/wallet/grants/${id}`,
+    approveGrant: (id: string) => `${A}/wallet/grants/${id}/approve`,
+    rejectGrant: (id: string) => `${A}/wallet/grants/${id}/reject`,
+    cancelGrant: (id: string) => `${A}/wallet/grants/${id}/cancel`,
+    retryGrant: (id: string) => `${A}/wallet/grants/${id}/retry-failed`,
   },
   finance: {
     summary: `${A}/finance/summary`,
@@ -94,29 +191,69 @@ export const API = {
   },
   promoCodes: {
     list: `${A}/promo-codes`,
-    item: (code: string) => `${A}/promo-codes/${code}`,
+    toggle: (id: string) => `${A}/promo-codes/${id}/toggle`,
+    affiliate: (id: string) => `${A}/promo-codes/${id}/affiliate`,
+    marginResidual: (id: string) => `${A}/promo-codes/${id}/margin-residual`,
   },
   affiliate: {
     list: `${A}/affiliates`,
+    create: `${A}/affiliates`,
+    detail: (id: string) => `${A}/affiliates/${id}`,
+    config: `${A}/affiliates/config`,
+    eligibility: `${A}/affiliates/eligibility`,
+    commissionSkips: `${A}/affiliates/commission-skips`,
+    commission: (id: string) => `${A}/affiliates/commissions/${id}`,
+    holdCommission: (id: string) => `${A}/affiliates/commissions/${id}/hold`,
+    releaseCommission: (id: string) => `${A}/affiliates/commissions/${id}/release`,
+    cancelCommission: (id: string) => `${A}/affiliates/commissions/${id}/cancel`,
+    commissionRate: (id: string) => `${A}/affiliates/${id}/commission-rate`,
+    suspend: (id: string) => `${A}/affiliates/${id}/suspend`,
+    reactivate: (id: string) => `${A}/affiliates/${id}/reactivate`,
+    close: (id: string) => `${A}/affiliates/${id}/close`,
+    reopen: (id: string) => `${A}/affiliates/${id}/reopen`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
     pay: (id: string) => `${A}/affiliates/${id}/payouts`,
   },
   referrals: {
-    program: `${A}/referrals/program`,
     list: `${A}/referrals`,
+    stats: `${A}/referrals/stats`,
+    validate: (id: string) => `${A}/referrals/${id}/validate`,
+    expire: (id: string) => `${A}/referrals/${id}/expire`,
+    filleuls: `${A}/referrals/filleuls`,
+    filleul: (userId: string) => `${A}/referrals/filleuls/${userId}`,
+    parrains: `${A}/referrals/parrains`,
+    parrain: (userId: string) => `${A}/referrals/parrains/${userId}`,
+    configs: `${A}/referrals/config`,
+    activeConfig: `${A}/referrals/config/active`,
+    config: (id: string) => `${A}/referrals/config/${id}`,
+    activateConfig: (id: string) => `${A}/referrals/config/${id}/activate`,
+    deactivateConfig: (id: string) => `${A}/referrals/config/${id}/deactivate`,
+    // Absentes du backend (faux backend) : voir missing-routes.ts
+    program: `${A}/referrals/program`,
     flag: (id: string) => `${A}/referrals/${id}/flag`,
   },
   notifications: {
     campaigns: `${A}/notifications/campaigns`,
   },
   pricing: {
-    zones: `${A}/pricing/zones`,
+    // Zones dessinées sur la carte (polygone, couleur) : absentes du backend, voir missing-routes.ts.
+    zones: `${A}/pricing/zone-areas`,
     tariffs: (zoneId: string) => `${A}/pricing/zones/${zoneId}/tariffs`,
     tariff: (zoneId: string, service: string) => `${A}/pricing/zones/${zoneId}/tariffs/${service}`,
     commissions: `${A}/pricing/commissions`,
   },
   rbac: {
-    members: `${A}/rbac/members`,
-    member: (id: string) => `${A}/rbac/members/${id}`,
+    members: `${A}/admins`,
+    register: `${A}/register`,
+    changeRole: (id: string) => `${A}/admins/${id}/role`,
+    deactivate: (id: string) => `${A}/admins/${id}/deactivate`,
+    reactivate: (id: string) => `${A}/admins/${id}/reactivate`,
+    grantPermission: (id: string) => `${A}/admins/${id}/grant-permission`,
+    roles: `${A}/roles`,
+    role: (id: string) => `${A}/roles/${id}/permissions`,
+    permissions: `${A}/permissions`,
+    myPermissions: `${A}/me/permissions`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
     audit: `${A}/rbac/audit-log`,
   },
   settings: {

@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { Module } from "./permissions";
-import { can } from "./permissions";
+import { can, canWithPermissions } from "./permissions";
 import type { SessionUser } from "./session";
 
 interface SessionState {
@@ -31,5 +31,8 @@ export const useSession = create<SessionState>((set, get) => ({
     await fetch("/api/auth/logout", { method: "POST" });
     set({ user: null, loaded: false });
   },
-  can: (module, need = "read") => can(get().user?.role, module, need),
+  can: (module, need = "read") => {
+    const user = get().user;
+    return user?.permissions ? canWithPermissions(user.permissions, module, need) : can(user?.role, module, need);
+  },
 }));

@@ -1,44 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { MODULES, ROLES, ROLE_LABELS, accessOf, type Role } from "@/shared/auth/permissions";
 import { useSession } from "@/shared/auth/session.store";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
-import { ago, dateTime } from "@/shared/lib/format";
-import { NAVIGATION } from "@/shared/config/navigation";
+import { dateTime } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
 import { Dialog } from "@/shared/ui/dialog";
-import { Button, Card, CardHeader, Chip, Field, fieldClass, Note, PageHeader, Tag } from "@/shared/ui/primitives";
+import { MissingRoutes } from "@/shared/ui/missing-routes";
+import { Button, Card, CardHeader, Chip, Field, fieldClass, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
+import { GrantDialog, RoleDialog } from "./role-dialogs";
 import { rbacUseCases } from "../application/rbac.use-cases";
-import type { AuditEntry, Member } from "../domain/rbac";
+import { ADMIN_STATUS_LABELS, groupByModule, type AdminStatus, type AuditEntry, type Member, type NewMember, type RoleInfo } from "../domain/rbac";
 
-const MODULE_LABEL = new Map(NAVIGATION.flatMap((g) => g.items).map((i) => [i.module, i.label] as const));
+const STATUS_TONE: Record<AdminStatus, Tone> = { active: "ok", suspended: "warn", deactivated: "bad" };
 const CATEGORIES: Array<AuditEntry["category"] | "all"> = ["all", "Argent", "Comptes", "Réglages", "Opérations"];
 
 export function RbacView() {
   const members = useResource(() => rbacUseCases.members(), "members");
+  const roles = useResource(() => rbacUseCases.roles(), "roles");
   const [category, setCategory] = useState<AuditEntry["category"] | "all">("all");
   const audit = useResource(() => rbacUseCases.audit(category), category);
   const actingId = useSession((s) => s.user?.id ?? "");
   const canWrite = useCanWrite("rbac");
   const { busy, run } = useAction();
   const [inviting, setInviting] = useState(false);
+  const [roleEditor, setRoleEditor] = useState<RoleInfo | "new" | null>(null);
+  const [granting, setGranting] = useState<Member | null>(null);
 
   return (
     <>
       <PageHeader title="Rôles, accès et journal">
         <Button tone="primary" className="ml-auto" disabled={!canWrite} onClick={() => setInviting(true)}>
-          Inviter un membre
+          Ajouter un membre
         </Button>
       </PageHeader>
       <div className="grid gap-3.5 xl:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-3.5">
           <Card className="overflow-hidden">
             <CardHeader title="Équipe interne">
-              <span className="text-xs text-muted">Connexion par e-mail et code à usage unique</span>
+              <span className="text-xs text-muted">Connexion par téléphone et mot de passe</span>
             </CardHeader>
             <ResourceView state={members} onRetry={members.reload}>
               {(list) => (
@@ -46,7 +49,7 @@ export function RbacView() {
                   rows={list}
                   rowKey={(m) => m.id}
                   columns={[
-                    { key: "name", header: "Membre", render: (m) => <span className="flex flex-col"><b>{m.name}</b><span className="text-xs text-muted">{m.email}</span></span> },
+                    { key: "name", header: "Membre", render: (m) => <span className="flex flex-col"><b>{m.name}</b><span className="text-xs text-muted">{m.email ?? m.phone}</span></span> },
                     {
                       key: "role",
                       header: "Rôle",
@@ -54,39 +57,56 @@ export function RbacView() {
                         <select
                           aria-label={`Rôle de ${m.name}`}
                           className={`${fieldClass} h-8 w-48`}
-                          value={m.role}
-                          disabled={!canWrite || busy}
+                          value={m.roleId}
+                          disabled={!canWrite || busy || !roles.data}
                           onChange={async (e) => {
-                            const r = await run(() => rbacUseCases.changeRole(m, e.target.value as Role, list, actingId), "Rôle modifié.");
-                            if (r) members.mutate((l) => l.map((x) => (x.id === r.id ? r : x)));
+                            const r = await run(() => rbacUseCases.changeRole(m, e.target.value, actingId), "Rôle modifié.");
+                            if (r !== undefined) members.reload();
                           }}
                         >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {ROLE_LABELS[r]}
+                          {(roles.data ?? []).map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.displayName}
                             </option>
                           ))}
+                          {roles.data && !roles.data.some((r) => r.id === m.roleId) ? <option value={m.roleId}>{m.roleName}</option> : null}
                         </select>
                       ),
                     },
-                    { key: "seen", header: "Dernière connexion", render: (m) => (m.invited ? <Tag tone="info">Invitation envoyée</Tag> : m.lastSeenAt ? ago(m.lastSeenAt) : "—") },
-                    { key: "2fa", header: "Double auth.", render: (m) => <Tag tone={m.twoFactor ? "ok" : "bad"}>{m.twoFactor ? "Oui" : "Non"}</Tag> },
+                    { key: "status", header: "Statut", render: (m) => <Tag tone={STATUS_TONE[m.status]}>{ADMIN_STATUS_LABELS[m.status]}</Tag> },
                     {
                       key: "rm",
                       header: "",
-                      render: (m) => (
-                        <Button
-                          size="sm"
-                          tone="ghost"
-                          disabled={!canWrite || busy}
-                          onClick={async () => {
-                            const r = await run(() => rbacUseCases.remove(m, list, actingId), `${m.name} n’a plus accès au back-office.`);
-                            if (r) members.mutate((l) => l.filter((x) => x.id !== m.id));
-                          }}
-                        >
-                          Retirer
-                        </Button>
-                      ),
+                      render: (m) =>
+                        m.status === "active" ? (
+                          <span className="flex gap-1.5">
+                          <Button size="sm" disabled={!canWrite || m.id === actingId} onClick={() => setGranting(m)}>
+                            Permission
+                          </Button>
+                          <Button
+                            size="sm"
+                            tone="ghost"
+                            disabled={!canWrite || busy}
+                            onClick={async () => {
+                              const r = await run(() => rbacUseCases.deactivate(m, actingId), `${m.name} n’a plus accès au back-office.`);
+                              if (r !== undefined) members.reload();
+                            }}
+                          >
+                            Désactiver
+                          </Button>
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={!canWrite || busy}
+                            onClick={async () => {
+                              const r = await run(() => rbacUseCases.reactivate(m), `${m.name} a de nouveau accès.`);
+                              if (r !== undefined) members.reload();
+                            }}
+                          >
+                            Réactiver
+                          </Button>
+                        ),
                     },
                   ]}
                 />
@@ -94,41 +114,35 @@ export function RbacView() {
             </ResourceView>
           </Card>
           <Card className="overflow-hidden">
-            <CardHeader title="Ce que chaque rôle voit">
-              <span className="text-xs text-muted">✓ agir · L lecture · — masqué</span>
+            <CardHeader title="Ce que chaque rôle peut faire">
+              <Button size="sm" tone="primary" disabled={!canWrite} onClick={() => setRoleEditor("new")}>
+                Nouveau rôle
+              </Button>
             </CardHeader>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead>
-                  <tr>
-                    <th scope="col" className="px-3 py-2 text-left text-[11px] text-muted">
-                      Module
-                    </th>
-                    {ROLES.map((r) => (
-                      <th key={r} scope="col" className="px-3 py-2 text-left text-[11px] text-muted">
-                        {ROLE_LABELS[r]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {MODULES.filter((m) => MODULE_LABEL.has(m)).map((m) => (
-                    <tr key={m} className="border-t border-field">
-                      <td className="px-3 py-1.5">{MODULE_LABEL.get(m)}</td>
-                      {ROLES.map((r) => {
-                        const a = accessOf(r, m);
-                        return (
-                          <td key={r} className="px-3 py-1.5">
-                            {a === "write" ? "✓" : a === "read" ? "L" : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
+            <ResourceView state={roles} onRetry={roles.reload}>
+              {(list) => (
+                <div className="flex flex-col gap-3 p-4">
+                  {list.map((r) => (
+                    <details key={r.id} className="rounded-[10px] border border-line px-3 py-2">
+                      <summary className="cursor-pointer text-[13px] font-bold">
+                        {r.displayName} <span className="font-normal text-muted">· {r.permissions.length} permissions</span>
+                      </summary>
+                      {r.description ? <p className="mt-1 text-xs text-muted">{r.description}</p> : null}
+                      <Button size="sm" className="mt-2" disabled={!canWrite} onClick={() => setRoleEditor(r)}>
+                        Modifier les permissions
+                      </Button>
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {groupByModule(r.permissions).map(([module, perms]) => (
+                          <div key={module} className="text-xs">
+                            <b>{module}</b> : <span className="text-muted">{perms.map((p) => p.code).join(", ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
                   ))}
-                </tbody>
-              </table>
-            </div>
-            <Note className="m-4">Matrice par défaut (shared/auth/permissions.ts). Rôles personnalisés et plafonds par rôle : à valider.</Note>
+                </div>
+              )}
+            </ResourceView>
           </Card>
         </div>
         <Card className="overflow-hidden">
@@ -155,16 +169,29 @@ export function RbacView() {
               />
             )}
           </ResourceView>
-          <Note className="m-4">Journal non modifiable. Durée de conservation : à valider.</Note>
+          <MissingRoutes area="rbac" className="m-4" />
         </Card>
       </div>
+      {roleEditor ? (
+        <RoleDialog
+          role={roleEditor === "new" ? null : roleEditor}
+          roles={roles.data ?? []}
+          onClose={() => setRoleEditor(null)}
+          onDone={() => {
+            setRoleEditor(null);
+            roles.reload();
+          }}
+        />
+      ) : null}
+      {granting ? <GrantDialog member={granting} actingId={actingId} onClose={() => setGranting(null)} /> : null}
       {inviting ? (
         <InviteDialog
           members={members.data ?? []}
+          roles={roles.data ?? []}
           onClose={() => setInviting(false)}
-          onDone={(m) => {
-            members.mutate((l) => [...l, m]);
+          onDone={() => {
             setInviting(false);
+            members.reload();
           }}
         />
       ) : null}
@@ -172,15 +199,14 @@ export function RbacView() {
   );
 }
 
-function InviteDialog({ members, onClose, onDone }: { members: Member[]; onClose: () => void; onDone: (m: Member) => void }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("support");
+function InviteDialog({ members, roles, onClose, onDone }: { members: Member[]; roles: RoleInfo[]; onClose: () => void; onDone: () => void }) {
+  const [m, setM] = useState<NewMember>({ firstName: "", lastName: "", phone: "", password: "", roleId: roles[0]?.id ?? "" });
   const { busy, run } = useAction();
+  const set = <K extends keyof NewMember>(k: K, v: NewMember[K]) => setM({ ...m, [k]: v });
   return (
     <Dialog
       open
-      title="Inviter un membre"
+      title="Ajouter un membre"
       onClose={onClose}
       footer={
         <>
@@ -189,26 +215,34 @@ function InviteDialog({ members, onClose, onDone }: { members: Member[]; onClose
             tone="primary"
             busy={busy}
             onClick={async () => {
-              const r = await run(() => rbacUseCases.invite(name, email, role, members), "Invitation envoyée par e-mail.");
-              if (r) onDone(r);
+              const r = await run(() => rbacUseCases.register(m, members), "Compte créé : transmettez-lui son mot de passe de façon sûre.");
+              if (r !== undefined) onDone();
             }}
           >
-            Inviter
+            Créer le compte
           </Button>
         </>
       }
     >
-      <Field label="Nom">
-        <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Prénom">
+          <input className={fieldClass} value={m.firstName} onChange={(e) => set("firstName", e.target.value)} />
+        </Field>
+        <Field label="Nom">
+          <input className={fieldClass} value={m.lastName} onChange={(e) => set("lastName", e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Téléphone">
+        <input className={fieldClass} type="tel" value={m.phone} onChange={(e) => set("phone", e.target.value)} />
       </Field>
-      <Field label="E-mail professionnel">
-        <input className={fieldClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field label="Mot de passe provisoire" hint="8 caractères minimum.">
+        <input className={fieldClass} type="password" autoComplete="new-password" value={m.password} onChange={(e) => set("password", e.target.value)} />
       </Field>
       <Field label="Rôle">
-        <select className={fieldClass} value={role} onChange={(e) => setRole(e.target.value as Role)}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r]}
+        <select className={fieldClass} value={m.roleId} onChange={(e) => set("roleId", e.target.value)}>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.displayName}
             </option>
           ))}
         </select>

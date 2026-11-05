@@ -18,8 +18,10 @@ export const MODULES = [
   "search",
   "live-ops",
   "rides",
+  "scheduled-rides",
   "delivery",
   "delivery-b2b",
+  "delivery-b2c",
   "rounds",
   "vtc",
   "parcel-types",
@@ -31,6 +33,17 @@ export const MODULES = [
   "establishments",
   "support",
   "wallet",
+  "withdrawals",
+  "wallet-grants",
+  "receivables",
+  "wallet-config",
+  "pricing-profiles",
+  "delivery-grid",
+  "subscription-plans",
+  "partners",
+  "system-config",
+  "users",
+  "payments",
   "finance",
   "promo-codes",
   "affiliate",
@@ -52,8 +65,10 @@ const MATRIX: Record<Module, Row> = {
   search: { operations: "read", support: "read", finance: "read" },
   "live-ops": { operations: "write", support: "read" },
   rides: { operations: "write", support: "write", finance: "read" },
+  "scheduled-rides": { operations: "write", support: "read" },
   delivery: { operations: "write", support: "write", finance: "read" },
   "delivery-b2b": { operations: "read", support: "read", finance: "write" },
+  "delivery-b2c": { operations: "write", support: "write", finance: "read" },
   rounds: { operations: "write" },
   vtc: { operations: "read" },
   "parcel-types": { operations: "read" },
@@ -65,6 +80,17 @@ const MATRIX: Record<Module, Row> = {
   establishments: { operations: "read", support: "write", finance: "read" },
   support: { operations: "read", support: "write" },
   wallet: { support: "read", finance: "write" },
+  withdrawals: { finance: "write" },
+  "wallet-grants": { finance: "write", support: "read" },
+  receivables: { finance: "write", operations: "read" },
+  "wallet-config": { finance: "read" },
+  "pricing-profiles": { operations: "read", finance: "read" },
+  "delivery-grid": { operations: "read", finance: "read" },
+  "subscription-plans": { operations: "read", finance: "write" },
+  partners: { support: "write", operations: "read" },
+  "system-config": { operations: "read" },
+  users: { operations: "read", support: "read" },
+  payments: { finance: "read", support: "read" },
   finance: { finance: "write" },
   "promo-codes": { finance: "read" },
   affiliate: { finance: "write" },
@@ -84,4 +110,49 @@ export function can(role: Role | undefined, module: Module, need: Exclude<Access
   if (!role) return false;
   const a = accessOf(role, module);
   return need === "read" ? a !== "none" : a === "write";
+}
+
+/**
+ * Avec le vrai backend, les droits viennent de permissions (`ride.view_all`…),
+ * pas des 4 rôles ci-dessus. Pour chaque module : permissions qui donnent la lecture
+ * et l'écriture. Un module absent de cette table n'a pas d'équivalent backend
+ * (il tourne sur le faux backend) : visible par tout agent, écriture réservée
+ * à qui peut créer des admins.
+ */
+const PERMISSION_MAP: Partial<Record<Module, { read: string[]; write: string[] }>> = {
+  rides: { read: ["ride.view_all"], write: ["ride.update_status"] },
+  "delivery-b2c": { read: ["delivery.order.view_all"], write: ["delivery.order.cancel"] },
+  "scheduled-rides": { read: ["ride.scheduled.assign.view"], write: ["ride.scheduled.assign"] },
+  drivers: { read: ["driver.view_all"], write: ["driver.suspend", "driver.reactivate", "driver.update_info"] },
+  contracts: { read: ["contract.view_all"], write: ["contract.create", "contract.installment.manual_payment", "contract.suspend"] },
+  wallet: { read: ["wallet.view_all"], write: ["wallet.block_withdrawals", "wallet.withdrawal.approve", "wallet.grant.request"] },
+  withdrawals: { read: ["wallet.view_all"], write: ["wallet.withdrawal.approve", "wallet.withdrawal.reject"] },
+  "wallet-grants": { read: ["wallet.grant.view"], write: ["wallet.grant.request", "wallet.grant.approve"] },
+  receivables: { read: ["wallet.view_all"], write: ["wallet.view_all"] },
+  "wallet-config": { read: ["wallet.config.manage"], write: ["wallet.config.manage"] },
+  "subscription-plans": { read: ["subscription.plan.view"], write: ["subscription.plan.manage"] },
+  partners: { read: ["partner.view_all", "partner.validate"], write: ["partner.validate"] },
+  "system-config": { read: ["admin.view_all"], write: ["admin.create"] },
+  users: { read: ["user.view_all"], write: ["user.view_all"] },
+  payments: { read: ["payment.view_all"], write: ["payment.view_all"] },
+  "promo-codes": { read: ["promo.view", "promo.manage"], write: ["promo.manage"] },
+  affiliate: { read: ["affiliate.view", "affiliate.manage"], write: ["affiliate.manage"] },
+  "driver-bonus": { read: ["driver.view_all"], write: ["driver.welcome_bonus.manage"] },
+  "pricing-zones": { read: ["pricing.grid.configure"], write: ["pricing.grid.configure"] },
+  "delivery-grid": { read: ["pricing.grid.configure"], write: ["pricing.grid.configure"] },
+  rbac: { read: ["admin.view_all"], write: ["admin.create", "admin.update_role"] },
+};
+
+export function canWithPermissions(permissions: string[], module: Module, need: Exclude<Access, "none"> = "read"): boolean {
+  const entry = PERMISSION_MAP[module];
+  if (!entry) return need === "read" || permissions.includes("admin.create");
+  return entry[need].some((p) => permissions.includes(p));
+}
+
+/** Rôle interne le plus proche, pour les écrans encore sur le faux backend. */
+export function roleFromPermissions(permissions: string[]): Role {
+  if (permissions.includes("admin.create")) return "superAdmin";
+  if (permissions.includes("wallet.withdrawal.approve")) return "finance";
+  if (permissions.includes("ride.update_status")) return "operations";
+  return "support";
 }

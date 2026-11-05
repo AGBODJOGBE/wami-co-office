@@ -1,20 +1,55 @@
-import { fail, guard, type Result } from "@/shared/lib/result";
-import { programBlocker, type Referral, type ReferralProgram } from "../domain/referral";
+import { fail, guard } from "@/shared/lib/result";
+import { draftBlocker, type ConfigDraft } from "../domain/config-draft";
+import { activateBlocker, deleteBlocker, programBlocker, validateBlocker, type Referral, type ReferralConfig, type ReferralProgram } from "../domain/referral";
 import type { ReferralsRepository } from "../domain/referrals.repository";
 import { HttpReferralsRepository } from "./referrals.http-repository";
 
 export function createReferralsUseCases(repo: ReferralsRepository) {
   return {
+    list: () => guard(() => repo.list()),
+    stats: () => guard(() => repo.stats()),
+    configs: () => guard(() => repo.configs()),
+    validate: async (r: Referral) => {
+      const blocker = validateBlocker(r);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.validate(r.id));
+    },
+    expire: async (r: Referral) => {
+      const blocker = validateBlocker(r);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.expire(r.id));
+    },
     program: () => guard(() => repo.program()),
-    saveProgram: (p: ReferralProgram): Promise<Result<ReferralProgram>> => {
+    saveProgram: async (p: ReferralProgram) => {
       const blocker = programBlocker(p);
-      if (blocker) return Promise.resolve(fail("validation", blocker));
+      if (blocker) return fail("validation", blocker);
       return guard(() => repo.saveProgram(p));
     },
-    list: () => guard(() => repo.list()),
-    flag: (r: Referral): Promise<Result<Referral>> => {
-      if (r.status !== "pending") return Promise.resolve(fail("validation", "Seul un parrainage en attente peut être bloqué."));
-      return guard(() => repo.flag(r.id, r.suspicion ?? "Bloqué manuellement"));
+    flag: async (r: Referral) => {
+      const blocker = validateBlocker(r);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.flag(r.id, "Bloqué depuis le back-office"));
+    },
+    createConfig: async (d: ConfigDraft) => {
+      const blocker = draftBlocker(d);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.createConfig({ ...d, name: d.name.trim() }));
+    },
+    updateConfig: async (c: ReferralConfig, d: ConfigDraft) => {
+      const blocker = draftBlocker(d);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.updateConfig(c.id, { ...d, name: d.name.trim() }));
+    },
+    activate: async (c: ReferralConfig) => {
+      const blocker = activateBlocker(c);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.activate(c.id));
+    },
+    deactivate: async (c: ReferralConfig) => (c.active ? guard(() => repo.deactivate(c.id)) : fail("validation", "Cette configuration n’est pas active.")),
+    remove: async (c: ReferralConfig) => {
+      const blocker = deleteBlocker(c);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.remove(c.id));
     },
   };
 }

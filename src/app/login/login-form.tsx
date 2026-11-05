@@ -6,13 +6,15 @@ import { ROLES, ROLE_LABELS, type Role } from "@/shared/auth/permissions";
 import { Button, Field, fieldClass, Note } from "@/shared/ui/primitives";
 
 /**
- * Connexion par e-mail et code à usage unique.
- * En démonstration (sans backend), on choisit son rôle pour tester les accès.
+ * Avec le backend WAMI : téléphone + mot de passe de l'agent.
+ * En démonstration (sans backend) : e-mail + code, et choix du rôle pour tester les accès.
  */
 export function LoginForm({ demo }: { demo: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("superAdmin");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,7 +27,7 @@ export function LoginForm({ demo }: { demo: boolean }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, role }),
+        body: JSON.stringify(demo ? { email, code, role } : { phone, password }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { message?: string };
@@ -48,12 +50,25 @@ export function LoginForm({ demo }: { demo: boolean }) {
         <span className="rounded-full bg-night-soft px-2 py-0.5 text-[10px] font-bold tracking-widest">ADMIN</span>
       </div>
       <h1 className="font-display text-xl font-bold">Connexion</h1>
-      <Field label="E-mail professionnel">
-        <input className={fieldClass} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-      </Field>
-      <Field label="Code reçu" hint={demo ? "Démonstration : 123456" : "Envoi du code par e-mail : à valider avec le backend."}>
-        <input className={fieldClass} inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
-      </Field>
+      {demo ? (
+        <>
+          <Field label="E-mail professionnel">
+            <input className={fieldClass} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Field label="Code reçu" hint="Démonstration : 123456">
+            <input className={fieldClass} inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+          </Field>
+        </>
+      ) : (
+        <>
+          <Field label="Téléphone">
+            <input className={fieldClass} type="tel" autoComplete="username" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </Field>
+          <Field label="Mot de passe">
+            <input className={fieldClass} type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </>
+      )}
       {demo ? (
         <Field label="Rôle (démonstration)">
           <select className={fieldClass} value={role} onChange={(e) => setRole(e.target.value as Role)}>
