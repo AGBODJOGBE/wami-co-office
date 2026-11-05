@@ -108,3 +108,7 @@ declareReal("PATCH", "/v1/admin/driver-welcome-bonus");
 // Courses programmées : affectation manuelle
 declareReal("GET", "/v1/admin/scheduled-rides/manual-assignment");
 declareReal("POST", "/v1/admin/scheduled-rides/:id/manual-assignment");
+
+// Utilisateurs et paiements
+declareReal("GET", "/v1/admin/users");
+declareReal("GET", "/v1/admin/payments/intents");

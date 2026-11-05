@@ -29,6 +29,12 @@ export const API = {
     list: `${A}/scheduled-rides/manual-assignment`,
     assign: (rideId: string) => `${A}/scheduled-rides/${rideId}/manual-assignment`,
   },
+  users: {
+    list: `${A}/users`,
+  },
+  payments: {
+    intents: `${A}/payments/intents`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,

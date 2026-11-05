@@ -38,6 +38,7 @@ export const NAVIGATION: NavGroup[] = [
   {
     label: "Clients",
     items: [
+      { module: "users", href: "/users", label: "Utilisateurs" },
       { module: "support", href: "/support", label: "Support et litiges" },
       { module: "delivery-b2b", href: "/delivery-b2b", label: "Comptes entreprises" },
       { module: "referrals", href: "/referrals", label: "Parrainage" },
@@ -50,6 +51,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "finance", href: "/finance", label: "Finances et versements" },
       { module: "wallet", href: "/wallet", label: "Portefeuilles" },
       { module: "withdrawals", href: "/withdrawals", label: "Retraits" },
+      { module: "payments", href: "/payments", label: "Paiements Mobile Money" },
       { module: "wallet-grants", href: "/wallet-grants", label: "Dotations" },
       { module: "receivables", href: "/receivables", label: "Revenus et créances" },
       { module: "affiliate", href: "/affiliate", label: "Affiliation" },

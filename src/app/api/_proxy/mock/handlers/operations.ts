@@ -145,6 +145,19 @@ export const operationsRoutes: MockRoute[] = [
     return { rideId: r!.rideId, driverId: d.id, status: "SCHEDULED_CONFIRMED" };
   }),
 
+  // Utilisateurs (contrat du backend WAMI : GET /api/admin/users).
+  route("GET", `${A}/users`, "users", ({ query }) => {
+    const q = query.get("search") ?? "";
+    const role = query.get("role");
+    const active = query.get("isActive");
+    const all = [
+      ...db().drivers.map((d) => ({ userId: d.id, firstName: d.name.split(" ")[0] ?? "", lastName: d.name.split(" ").slice(1).join(" "), phoneNumber: d.phone, email: null, role: "DRIVER", isActive: d.status === "active", createdAt: d.joinedAt })),
+      ...db().wallets.filter((w) => w.ownerType === "client").map((w) => ({ userId: w.id, firstName: w.ownerName.split(" ")[0] ?? "", lastName: w.ownerName.split(" ").slice(1).join(" "), phoneNumber: w.phone, email: null, role: "PASSENGER", isActive: w.status === "active", createdAt: new Date().toISOString() })),
+    ];
+    const users = all.filter((u) => (!role || u.role === role) && (active === null || String(u.isActive) === active) && matches(q, u.firstName, u.lastName, u.phoneNumber));
+    return { users, total: users.length };
+  }),
+
   // ── Livraisons ──
   route("GET", `${A}/deliveries`, "delivery", ({ query }) => {
     const type = query.get("type");

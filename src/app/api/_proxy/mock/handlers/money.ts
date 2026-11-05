@@ -230,6 +230,18 @@ export const moneyRoutes: MockRoute[] = [
     return { ...mockWelcomeBonus, remainingSlots: mockWelcomeBonus.maxEligibleDrivers - mockWelcomeBonus.consumedCount };
   }),
 
+  // Paiements (contrat du backend WAMI : /api/admin/payments/intents).
+  route("GET", `${A}/payments/intents`, "payments", ({ query }) => {
+    const provider = query.get("provider");
+    const now = Date.now();
+    const intents = [
+      { paymentIntentId: "pi-1", walletId: "w-1", ownerName: "[Client] Gisèle A.", ownerPhone: "+229 01 97 11 00 01", walletType: "PAYMENT", operationType: "RECHARGE", status: "SUCCESS", provider: "MTN_MOMO", amount: 5000, phone: "+229 01 97 11 00 01", failureReason: null, createdAt: new Date(now - 3_600_000).toISOString(), updatedAt: new Date(now).toISOString() },
+      { paymentIntentId: "pi-2", walletId: "w-5", ownerName: "[Client] Compte suspect", ownerPhone: "+229 01 97 11 00 09", walletType: "PAYMENT", operationType: "RECHARGE", status: "FAILED", provider: "FEDAPAY", amount: 20_000, phone: null, failureReason: "Solde Mobile Money insuffisant", createdAt: new Date(now - 7_200_000).toISOString(), updatedAt: new Date(now).toISOString() },
+      { paymentIntentId: "pi-3", walletId: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerPhone: "+229 01 97 00 00 01", walletType: "EARNINGS", operationType: "RECHARGE", status: "PENDING", provider: "FEDAPAY", amount: 10_000, phone: null, failureReason: null, createdAt: new Date(now - 600_000).toISOString(), updatedAt: new Date(now).toISOString() },
+    ].filter((p) => !provider || p.provider === provider);
+    return { intents, total: intents.length };
+  }),
+
   // Route absente du backend (faux backend) : ajustement manuel.
   route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
     const w = find(db().wallets, (x) => x.id === params.id, "Route absente du backend : l’ajustement ne marche que sur les portefeuilles fictifs.");
