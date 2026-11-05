@@ -122,6 +122,26 @@ export const operationsRoutes: MockRoute[] = [
     return { rideId: r.id, rideNumber: r.id, oldStatus: "IN_PROGRESS", newStatus: "CANCELLED_SYSTEM", reason };
   }),
 
+  // Détail d'une course (contrat du backend WAMI : telemetry, matching, track, guarantee-settlement).
+  route("GET", `${A}/rides/:id/telemetry`, "rides", ({ params }) => {
+    const r = find(db().rides, (x) => x.id === params.id);
+    if (r.status === "inProgress") return { rideId: r.id, rideNumber: r.id, status: "IN_PROGRESS", available: false, reason: "RIDE_NOT_TERMINAL_YET" };
+    return { rideId: r.id, rideNumber: r.id, status: "COMPLETED", available: true, summary: { outcome: "COMPLETED", dataAvailability: "FULL", distances: { actualMeters: r.distanceKm * 1000, estimatedMeters: r.distanceKm * 1000 + 300 }, durations: { totalSeconds: r.durationMin * 60 }, decisions: { surgeApplied: false }, signal: { gapsCount: 1, quality: "GOOD" } } };
+  }),
+  route("GET", `${A}/rides/:id/matching`, "rides", ({ params }) => {
+    const r = find(db().rides, (x) => x.id === params.id);
+    return { rideId: r.id, rideNumber: r.id, status: "IN_PROGRESS", available: true, summary: { version: 1, solicitedCount: 3, ignoredCount: 1, rejectedCount: 0, cycles: [{ at: r.requestedAt, trigger: "INITIAL", vehicleType: "MOTO", outcome: "SOLICITED", steps: [{ radiusKm: 2, found: 4, excludedBalance: 0, alreadyContacted: 0, eligible: 4 }] }], milestones: [] } };
+  }),
+  route("GET", `${A}/rides/:id/track`, "rides", ({ params }) => {
+    const r = find(db().rides, (x) => x.id === params.id);
+    if (r.status === "inProgress") return { rideId: r.id, trackAvailable: false, reason: "RIDE_NOT_TERMINAL_YET" };
+    return { rideId: r.id, trackAvailable: true, pointCount: 240, decimatedPointCount: 24, every: 10, truncated: false, discardedPointsCount: 0, geojson: { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: { rideStatus: "IN_PROGRESS", startTimestamp: r.requestedAt, endTimestamp: r.requestedAt, pointCount: 240 } }] }, points: [] };
+  }),
+  route("GET", `${A}/rides/:id/guarantee-settlement`, "rides", ({ params }) => {
+    find(db().rides, (x) => x.id === params.id);
+    throw notFound("Cette course n’a pas de garantie.");
+  }),
+
   // Courses programmées à affecter (contrat du backend WAMI : /api/admin/scheduled-rides/…).
   route("GET", `${A}/scheduled-rides/manual-assignment`, "scheduled-rides", () => ({
     thresholdMinutes: 45,

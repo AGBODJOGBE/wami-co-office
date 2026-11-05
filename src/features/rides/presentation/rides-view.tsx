@@ -10,6 +10,7 @@ import { Dialog } from "@/shared/ui/dialog";
 import { Button, Card, Field, fieldClass, InfoRow, Kpi, PageHeader, Segmented, Tag } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { useRidesUi } from "../application/rides.store";
+import { RideDetailDialog } from "./ride-detail-dialog";
 import { ridesUseCases } from "../application/rides.use-cases";
 import { RIDE_CATEGORY_LABELS, totals, type Ride } from "../domain/ride";
 
@@ -97,6 +98,7 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
   const { busy, run } = useAction();
   const canWrite = useCanWrite("rides");
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(false);
   const [reason, setReason] = useState("");
   return (
     <Card className="flex flex-col gap-1 px-4 py-3.5">
@@ -117,7 +119,11 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
       <InfoRow label="Commission WAMI">{fcfa(ride.commission)}</InfoRow>
       <InfoRow label="Paiement">{ride.payment === "cash" ? "Espèces" : ride.payment === "momo" ? "Mobile Money" : "Portefeuille"}</InfoRow>
       {ride.cancelReason ? <InfoRow label="Motif d’annulation">{ride.cancelReason}</InfoRow> : null}
-      <Button className="mt-2" tone="danger" disabled={!canWrite || ride.status !== "inProgress"} onClick={() => setOpen(true)}>
+      <Button className="mt-2" onClick={() => setDetail(true)}>
+        Matching, télémétrie, trace…
+      </Button>
+      {detail ? <RideDetailDialog ride={ride} onClose={() => setDetail(false)} /> : null}
+      <Button tone="danger" disabled={!canWrite || ride.status !== "inProgress"} onClick={() => setOpen(true)}>
         Annuler la course
       </Button>
       <Dialog

@@ -119,3 +119,9 @@ declareReal("PATCH", "/v1/admin/drivers/:id/approve");
 declareReal("GET", "/v1/admin/drivers/online");
 declareReal("PATCH", "/v1/admin/drivers/:id/driver-type");
 declareReal("GET", "/v1/admin/drivers/:id/sessions");
+
+// Détail d'une course : matching, télémétrie, trace GPS, règlement de garantie
+declareReal("GET", "/v1/admin/rides/:id/telemetry");
+declareReal("GET", "/v1/admin/rides/:id/matching");
+declareReal("GET", "/v1/admin/rides/:id/track");
+declareReal("GET", "/v1/admin/rides/:id/guarantee-settlement");
