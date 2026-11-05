@@ -70,3 +70,12 @@ declareReal("GET", "/v1/admin/driver-bonus/activity-payouts");
 declareReal("GET", "/v1/admin/driver-bonus/quality-ledger");
 declareReal("GET", "/v1/admin/driver-bonus/run-config");
 declareReal("PUT", "/v1/admin/driver-bonus/run-config");
+
+// Administrateurs, rôles et permissions
+declareReal("GET", "/v1/admin/admins");
+declareReal("POST", "/v1/admin/register");
+declareReal("PATCH", "/v1/admin/admins/:id/role");
+declareReal("PATCH", "/v1/admin/admins/:id/deactivate");
+declareReal("PATCH", "/v1/admin/admins/:id/reactivate");
+declareReal("GET", "/v1/admin/roles");
+declareReal("GET", "/v1/admin/permissions");

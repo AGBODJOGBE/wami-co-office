@@ -1,5 +1,5 @@
 import "server-only";
-import { ROLES, ROLE_LABELS, type Role } from "@/shared/auth/permissions";
+import { MODULES, ROLES, ROLE_LABELS, accessOf, type Role } from "@/shared/auth/permissions";
 import { audit, db, newId } from "../db";
 import { find, replace, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
@@ -29,30 +29,56 @@ export const settingsRoutes: MockRoute[] = [
   route("GET", `${A}/pricing/commissions`, "pricing-zones", () => db().commissions),
 
   // ── Rôles et journal ──
-  route("GET", `${A}/rbac/members`, "rbac", () => db().members),
-  route("POST", `${A}/rbac/members`, "rbac", ({ body, user }) => {
-    const email = str(body, "email").toLowerCase();
-    if (db().members.some((m) => m.email === email)) throw invalid("Déjà dans l’équipe.");
-    const m: Member = { id: newId("agent"), name: str(body, "name"), email, role: asRole(body.role), lastSeenAt: null, twoFactor: false, invited: true };
-    db().members.push(m);
-    audit(user, "Comptes", `A invité ${m.name} (${ROLE_LABELS[m.role]})`);
-    return m;
+  // Même contrat que le backend WAMI : /api/admin/admins, /register, /roles, PATCH …/role|deactivate|reactivate.
+  route("GET", `${A}/admins`, "rbac", () => {
+    const admins = db().members.map((m) => {
+      const [firstName = "", ...rest] = m.name.split(" ");
+      return { adminId: m.id, firstName, lastName: rest.join(" "), email: m.email, phoneNumber: "+229 01 00 00 00 00", roleId: m.role, roleName: ROLE_LABELS[m.role], status: m.deactivated ? "DEACTIVATED" : "ACTIVE", createdAt: new Date().toISOString() };
+    });
+    return { admins, total: admins.length, page: 1, limit: 100 };
   }),
-  route("PATCH", `${A}/rbac/members/:id`, "rbac", ({ params, body, user }) => {
+  route("GET", `${A}/roles`, "rbac", () => ({
+    roles: ROLES.map((r) => ({
+      id: r,
+      name: r.toUpperCase(),
+      displayName: ROLE_LABELS[r],
+      description: null,
+      isSystem: true,
+      permissions: MODULES.filter((m) => accessOf(r, m) !== "none").map((m) => ({ id: `${r}-${m}`, code: `${m}.${accessOf(r, m) === "write" ? "manage" : "view"}`, name: m, module: m })),
+    })),
+  })),
+  route("POST", `${A}/register`, "rbac", ({ body, user }) => {
+    const firstName = str(body, "firstName");
+    const lastName = str(body, "lastName");
+    if (!firstName || !lastName || !str(body, "phone") || !str(body, "password") || !str(body, "roleId")) throw invalid("Phone, password, firstName, lastName, and roleId are required");
+    const role = asRole(body.roleId);
+    const m: Member = { id: newId("agent"), name: `${firstName} ${lastName}`, email: `${firstName.toLowerCase()}@wami.example`, role, lastSeenAt: null, twoFactor: false, invited: true };
+    db().members.push(m);
+    audit(user, "Comptes", `A créé le compte de ${m.name} (${ROLE_LABELS[role]})`);
+    return { adminId: m.id, userId: m.id, roleName: ROLE_LABELS[role], message: "Admin registered" };
+  }),
+  route("PATCH", `${A}/admins/:id/role`, "rbac", ({ params, body, user }) => {
     const m = find(db().members, (x) => x.id === params.id);
-    const role = asRole(body.role);
-    if (m.role === "superAdmin" && role !== "superAdmin" && db().members.filter((x) => x.role === "superAdmin").length <= 1) {
+    const role = asRole(body.roleId);
+    if (m.role === "superAdmin" && role !== "superAdmin" && db().members.filter((x) => x.role === "superAdmin" && !x.deactivated).length <= 1) {
       throw new MockError(409, "Il doit rester au moins un super admin.", "last_admin");
     }
     audit(user, "Comptes", `A donné le rôle ${ROLE_LABELS[role]} à ${m.name}`);
-    return replace(db().members, (x) => x.id === m.id, { ...m, role });
+    replace(db().members, (x) => x.id === m.id, { ...m, role });
+    return { adminId: m.id, newRoleName: ROLE_LABELS[role], message: "Role changed" };
   }),
-  route("DELETE", `${A}/rbac/members/:id`, "rbac", ({ params, user }) => {
-    const m = find(db().members, (x) => x.id === params.id);
-    db().members = db().members.filter((x) => x.id !== m.id);
-    audit(user, "Comptes", `A retiré l’accès de ${m.name}`);
-    return { ok: true };
-  }),
+  ...(["deactivate", "reactivate"] as const).map((action) =>
+    route("PATCH", `${A}/admins/:id/${action}`, "rbac", ({ params, user }) => {
+      const m = find(db().members, (x) => x.id === params.id);
+      if (action === "deactivate" && m.role === "superAdmin" && db().members.filter((x) => x.role === "superAdmin" && !x.deactivated).length <= 1) {
+        throw new MockError(409, "Il doit rester au moins un super admin.", "last_admin");
+      }
+      audit(user, "Comptes", `${action === "deactivate" ? "A retiré" : "A rétabli"} l’accès de ${m.name}`);
+      replace(db().members, (x) => x.id === m.id, { ...m, deactivated: action === "deactivate" });
+      return { adminId: m.id, message: action };
+    }),
+  ),
+  // Route absente du backend (faux backend) : journal d'audit.
   route("GET", `${A}/rbac/audit-log`, "rbac", ({ query }) => {
     const category = query.get("category");
     return db().audit.filter((a) => !category || a.category === category);

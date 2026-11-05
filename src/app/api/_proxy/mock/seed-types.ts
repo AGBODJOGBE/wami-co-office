@@ -64,7 +64,19 @@ export interface ReferralProgram {
 }
 export type { Campaign } from "@/features/notifications";
 export type { Commission, Tariff, Zone } from "@/features/pricing-zones";
-export type { AuditEntry, Member } from "@/features/rbac";
+export type { AuditEntry } from "@/features/rbac";
+
+/** Agent tel que stocké par le faux backend (converti au format du backend WAMI dans les handlers). */
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: import("@/shared/auth/permissions").Role;
+  lastSeenAt: string | null;
+  twoFactor: boolean;
+  invited: boolean;
+  deactivated?: boolean;
+}
 export type { PlatformSettings } from "@/features/settings";
 export type { SearchHit } from "@/features/search";
 

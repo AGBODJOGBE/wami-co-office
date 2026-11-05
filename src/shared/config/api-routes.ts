@@ -194,8 +194,17 @@ export const API = {
     commissions: `${A}/pricing/commissions`,
   },
   rbac: {
-    members: `${A}/rbac/members`,
-    member: (id: string) => `${A}/rbac/members/${id}`,
+    members: `${A}/admins`,
+    register: `${A}/register`,
+    changeRole: (id: string) => `${A}/admins/${id}/role`,
+    deactivate: (id: string) => `${A}/admins/${id}/deactivate`,
+    reactivate: (id: string) => `${A}/admins/${id}/reactivate`,
+    grantPermission: (id: string) => `${A}/admins/${id}/grant-permission`,
+    roles: `${A}/roles`,
+    role: (id: string) => `${A}/roles/${id}/permissions`,
+    permissions: `${A}/permissions`,
+    myPermissions: `${A}/me/permissions`,
+    // Absente du backend (faux backend) : voir missing-routes.ts
     audit: `${A}/rbac/audit-log`,
   },
   settings: {
