@@ -46,7 +46,23 @@ export type { Ticket } from "@/features/support";
 export type { Wallet } from "@/features/wallet";
 export type { FinanceSummary, PayoutBatch } from "@/features/finance";
 export type { PromoCode } from "@/features/promo-codes";
-export type { Referral, ReferralProgram } from "@/features/referrals";
+/** Parrainage tel que stocké par le faux backend (converti au format du backend WAMI dans les handlers). */
+export interface Referral {
+  id: string;
+  referrerName: string;
+  refereeName: string;
+  createdAt: string;
+  missionsDone: number;
+  status: "pending" | "rewarded" | "flagged";
+  suspicion: string | null;
+}
+
+export interface ReferralProgram {
+  active: boolean;
+  referrerReward: number;
+  refereeReward: number;
+  requiredMissions: number;
+}
 export type { Campaign } from "@/features/notifications";
 export type { Commission, Tariff, Zone } from "@/features/pricing-zones";
 export type { AuditEntry, Member } from "@/features/rbac";

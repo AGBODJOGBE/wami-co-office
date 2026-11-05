@@ -46,3 +46,13 @@ declareReal("POST", "/v1/admin/affiliates/:id/suspend");
 declareReal("POST", "/v1/admin/affiliates/:id/reactivate");
 declareReal("POST", "/v1/admin/affiliates/:id/close");
 declareReal("POST", "/v1/admin/affiliates/:id/reopen");
+
+// Parrainage
+declareReal("GET", "/v1/admin/referrals");
+declareReal("GET", "/v1/admin/referrals/stats");
+declareReal("POST", "/v1/admin/referrals/:id/validate");
+declareReal("POST", "/v1/admin/referrals/:id/expire");
+declareReal("GET", "/v1/admin/referrals/config");
+declareReal("POST", "/v1/admin/referrals/config/:id/activate");
+declareReal("POST", "/v1/admin/referrals/config/:id/deactivate");
+declareReal("DELETE", "/v1/admin/referrals/config/:id");

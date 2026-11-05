@@ -2,9 +2,23 @@ import "server-only";
 import { audit, db, newId } from "../db";
 import { find, num, replace, requireText, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
-import type { Campaign, ReferralProgram } from "../seed-types";
+import type { Campaign } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Configurations de parrainage de démonstration (état en mémoire, comme le reste du faux backend). */
+const referralConfigs: Array<{
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  rewardMatrix: Array<{ referrerType: string; referredType: string; rewardMode: "FIXED" | "PERCENTAGE"; referrerAmount: number; referredAmount: number }>;
+  validationConditions: { expirationDays: number | null };
+  activatedAt: string | null;
+}> = [
+  { id: "rc-1", name: "Lancement passagers", description: "Parrainage passager → passager", isActive: true, rewardMatrix: [{ referrerType: "PASSENGER", referredType: "PASSENGER", rewardMode: "FIXED", referrerAmount: 1000, referredAmount: 500 }], validationConditions: { expirationDays: 30 }, activatedAt: new Date().toISOString() },
+  { id: "rc-2", name: "Chauffeurs (brouillon)", description: null, isActive: false, rewardMatrix: [{ referrerType: "DRIVER_STANDARD", referredType: "DRIVER_STANDARD", rewardMode: "FIXED", referrerAmount: 5000, referredAmount: 0 }], validationConditions: { expirationDays: null }, activatedAt: null },
+];
 
 /** Support, portefeuilles, finances, promos, affiliation, parrainage, notifications. */
 export const moneyRoutes: MockRoute[] = [
@@ -190,20 +204,58 @@ export const moneyRoutes: MockRoute[] = [
     return { affiliateId: a.id, commissionRate: rate };
   }),
 
-  route("GET", `${A}/referrals/program`, "referrals", () => db().referralProgram),
-  route("PUT", `${A}/referrals/program`, "referrals", ({ body, user }) => {
-    db().referralProgram = body as unknown as ReferralProgram;
-    audit(user, "Réglages", "A modifié le programme de parrainage");
-    return db().referralProgram;
+  // Même contrat que le backend WAMI : /api/admin/referrals (+ configurations, statistiques).
+  route("GET", `${A}/referrals`, "referrals", () =>
+    db().referrals.map((r) => ({
+      referralId: r.id,
+      referrerId: r.referrerName,
+      referredUserId: r.refereeName,
+      referralCode: `REF-${r.id}`,
+      referralType: "PASSENGER",
+      status: r.status === "pending" ? "PENDING" : r.status === "rewarded" ? "VALIDATED" : "EXPIRED",
+      referrerReward: r.status === "rewarded" ? db().referralProgram.referrerReward : 0,
+      referredReward: r.status === "rewarded" ? db().referralProgram.refereeReward : 0,
+      validatedAt: r.status === "rewarded" ? r.createdAt : null,
+      createdAt: r.createdAt,
+    })),
+  ),
+  route("GET", `${A}/referrals/stats`, "referrals", () => {
+    const rows = db().referrals;
+    const rewarded = rows.filter((r) => r.status === "rewarded").length;
+    return {
+      totalReferrals: rows.length,
+      validatedReferrals: rewarded,
+      pendingReferrals: rows.filter((r) => r.status === "pending").length,
+      expiredReferrals: rows.filter((r) => r.status === "flagged").length,
+      totalRewardsGiven: rewarded * (db().referralProgram.referrerReward + db().referralProgram.refereeReward),
+    };
   }),
-  route("GET", `${A}/referrals`, "referrals", () => db().referrals),
-  route("POST", `${A}/referrals/:id/flag`, "referrals", ({ params, body, user }) => {
-    const r = find(db().referrals, (x) => x.id === params.id);
-    audit(user, "Comptes", `A bloqué le parrainage ${r.referrerName} → ${r.refereeName} · ${str(body, "reason")}`);
-    return replace(db().referrals, (x) => x.id === r.id, { ...r, status: "flagged" });
+  ...(["validate", "expire"] as const).map((action) =>
+    route("POST", `${A}/referrals/:id/${action}`, "referrals", ({ params, user }) => {
+      const r = find(db().referrals, (x) => x.id === params.id);
+      if (r.status !== "pending") throw invalid("Referral is not pending");
+      audit(user, "Argent", `Parrainage ${r.id} : ${action}`);
+      replace(db().referrals, (x) => x.id === r.id, { ...r, status: action === "validate" ? "rewarded" : "flagged" });
+      return { referralId: r.id, status: action === "validate" ? "VALIDATED" : "EXPIRED" };
+    }),
+  ),
+  route("GET", `${A}/referrals/config`, "referrals", () => referralConfigs),
+  ...(["activate", "deactivate"] as const).map((action) =>
+    route("POST", `${A}/referrals/config/:id/${action}`, "referrals", ({ params, user }) => {
+      const c = find(referralConfigs, (x) => x.id === params.id);
+      audit(user, "Argent", `Configuration de parrainage « ${c.name} » : ${action}`);
+      for (const x of referralConfigs) x.isActive = action === "activate" ? x.id === c.id : x.isActive && x.id !== c.id;
+      return { id: c.id, isActive: c.isActive };
+    }),
+  ),
+  route("DELETE", `${A}/referrals/config/:id`, "referrals", ({ params, user }) => {
+    const c = find(referralConfigs, (x) => x.id === params.id);
+    if (c.isActive) throw invalid("Cannot delete an active configuration");
+    referralConfigs.splice(referralConfigs.indexOf(c), 1);
+    audit(user, "Argent", `Configuration de parrainage « ${c.name} » supprimée`);
+    return { id: c.id };
   }),
 
-  // ── Notifications ──
   route("GET", `${A}/notifications/campaigns`, "notifications", () => db().campaigns),
   route("POST", `${A}/notifications/campaigns`, "notifications", ({ body, user }) => {
     const draft = body as unknown as Pick<Campaign, "title" | "body" | "audience" | "channel" | "zone" | "scheduledAt">;
