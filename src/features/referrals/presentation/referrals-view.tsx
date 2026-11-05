@@ -7,7 +7,7 @@ import { dayMonth, fcfa } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
 import { MissingRoutes } from "@/shared/ui/missing-routes";
-import { Button, Card, CardHeader, Field, fieldClass, Kpi, Note, PageHeader, Tag, Toggle, type Tone } from "@/shared/ui/primitives";
+import { Button, Card, CardHeader, Field, fieldClass, Kpi, PageHeader, Tag, Toggle, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { ConfigDialog } from "./config-dialog";
 import { referralsUseCases } from "../application/referrals.use-cases";

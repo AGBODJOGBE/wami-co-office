@@ -140,3 +140,9 @@ declareReal("DELETE", "/v1/admin/pricing/zones/:id");
 // Parrainage : création et édition des configurations
 declareReal("POST", "/v1/admin/referrals/config");
 declareReal("PUT", "/v1/admin/referrals/config/:id");
+
+// Primes chauffeurs : création et édition des configurations
+for (const kind of ["config", "activity-config", "quality-config"]) {
+  declareReal("POST", `/v1/admin/driver-bonus/${kind}`);
+  declareReal("PUT", `/v1/admin/driver-bonus/${kind}/:id`);
+}

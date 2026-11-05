@@ -6,9 +6,10 @@ import { useResource } from "@/shared/hooks/use-resource";
 import { dateTime, fcfa } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
-import { Button, Card, CardHeader, Note, PageHeader, Segmented, Tag, Toggle } from "@/shared/ui/primitives";
+import { Button, Card, CardHeader, PageHeader, Segmented, Tag, Toggle } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { driverBonusUseCases } from "../application/driver-bonus.use-cases";
+import { BonusConfigDialog } from "./bonus-config-dialog";
 import { ChallengesPanel } from "./challenges-panel";
 import { BONUS_FAMILY_LABELS, BONUS_LEDGER_LABELS, type BonusConfig, type BonusEntry, type BonusFamily, type BonusLedger, type BonusRunConfig } from "../domain/bonus";
 
@@ -36,7 +37,6 @@ export function DriverBonusView() {
           <RunConfig />
         </>
       )}
-      <Note>La création et la modification des paliers, taux et seuils arrivent dans un prochain écran ; activation, désactivation et suppression sont disponibles ici.</Note>
     </>
   );
 }
@@ -45,9 +45,25 @@ function Configs({ family }: { family: BonusFamily }) {
   const configs = useResource(() => driverBonusUseCases.configs(family), family);
   const canWrite = useCanWrite("driver-bonus");
   const { busy, run } = useAction();
+  const [editing, setEditing] = useState<BonusConfig | "new" | null>(null);
   return (
     <Card className="overflow-hidden">
-      <CardHeader title={`Configurations · ${BONUS_FAMILY_LABELS[family]}`} />
+      <CardHeader title={`Configurations · ${BONUS_FAMILY_LABELS[family]}`}>
+        <Button size="sm" tone="primary" disabled={!canWrite} onClick={() => setEditing("new")}>
+          Nouvelle
+        </Button>
+      </CardHeader>
+      {editing ? (
+        <BonusConfigDialog
+          family={family}
+          config={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null);
+            configs.reload();
+          }}
+        />
+      ) : null}
       <ResourceView state={configs} onRetry={configs.reload}>
         {(rows) => (
           <DataTable<BonusConfig>
@@ -64,6 +80,9 @@ function Configs({ family }: { family: BonusFamily }) {
                 render: (c) => (
                   <span className="flex gap-1.5">
                     {c.active ? <Tag tone="ok">Active</Tag> : null}
+                    <Button size="sm" disabled={!canWrite} onClick={() => setEditing(c)}>
+                      Modifier
+                    </Button>
                     <Button
                       size="sm"
                       disabled={!canWrite || busy}

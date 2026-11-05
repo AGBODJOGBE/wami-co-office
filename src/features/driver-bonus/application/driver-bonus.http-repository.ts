@@ -1,6 +1,6 @@
 import { API } from "@/shared/config/api-routes";
 import { http } from "@/shared/lib/http";
-import type { BonusConfig, BonusEntry, BonusFamily, BonusLedger, BonusRunConfig } from "../domain/bonus";
+import type { BonusConfig, BonusDraft, TierDraft, BonusEntry, BonusFamily, BonusLedger, BonusRunConfig } from "../domain/bonus";
 import type { DriverBonusRepository } from "../domain/driver-bonus.repository";
 
 /** Configuration renvoyée par `GET /api/admin/driver-bonus/{config,activity-config,quality-config}`. */
@@ -23,7 +23,28 @@ export function toRules(family: BonusFamily, c: BackendBonusConfig): string[] {
 }
 
 export function toBonusConfig(family: BonusFamily, c: BackendBonusConfig): BonusConfig {
-  return { id: c.id, family, name: c.name, description: c.description, vehicleCategory: c.vehicleCategory, active: c.isActive, rules: toRules(family, c) };
+  return { id: c.id, family, name: c.name, description: c.description, vehicleCategory: c.vehicleCategory, active: c.isActive, rules: toRules(family, c), draft: toDraft(family, c) };
+}
+
+/** Contenu d'une configuration du backend sous forme de brouillon éditable. */
+export function toDraft(family: BonusFamily, c: BackendBonusConfig): BonusDraft {
+  const tiers: TierDraft[] = c.tiers.map((t) =>
+    family === "tier" ? { name: "", threshold: t.ridesThreshold ?? 0, value: t.bonusAmount ?? 0 } : family === "activity" ? { name: t.name ?? "", threshold: t.ridesThresholdPerDay ?? 0, value: t.bonusPct ?? 0 } : { name: "", threshold: t.minRating ?? 0, value: t.bonusAmount ?? 0 },
+  );
+  return { family, name: c.name, description: c.description ?? "", vehicleCategory: c.vehicleCategory, minRidesPerMonth: c.minRidesPerMonth ?? 100, tiers };
+}
+
+/** Corps de création ou de modification d'une configuration de primes. */
+export function toBody(d: BonusDraft, forUpdate: boolean) {
+  const tiers = d.tiers.map((t) => (d.family === "tier" ? { ridesThreshold: t.threshold, bonusAmount: t.value } : d.family === "activity" ? { name: t.name.trim(), ridesThresholdPerDay: t.threshold, bonusPct: t.value } : { minRating: t.threshold, bonusAmount: t.value }));
+  return {
+    name: d.name.trim(),
+    description: d.description.trim() || null,
+    // La catégorie de véhicule se fixe à la création.
+    ...(forUpdate ? {} : { vehicleCategory: d.vehicleCategory }),
+    ...(d.family === "quality" ? { minRidesPerMonth: d.minRidesPerMonth } : {}),
+    tiers,
+  };
 }
 
 const base = (family: BonusFamily) => (family === "tier" ? API.driverBonus.tierConfigs : family === "activity" ? API.driverBonus.activityConfigs : API.driverBonus.qualityConfigs);
@@ -68,6 +89,12 @@ export class HttpDriverBonusRepository implements DriverBonusRepository {
   async configs(family: BonusFamily) {
     const rows = await http.get<BackendBonusConfig[]>(base(family));
     return rows.map((c) => toBonusConfig(family, c));
+  }
+  async create(d: BonusDraft) {
+    await http.post(base(d.family), toBody(d, false));
+  }
+  async update(c: BonusConfig, d: BonusDraft) {
+    await http.put(`${base(c.family)}/${c.id}`, toBody({ ...d, family: c.family }, true));
   }
   async activate(c: BonusConfig) {
     await http.post(`${base(c.family)}/${c.id}/activate`);

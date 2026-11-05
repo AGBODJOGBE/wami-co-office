@@ -218,6 +218,20 @@ export const networkRoutes: MockRoute[] = [
           return { id: c.id, isActive: c.isActive };
         }),
       ),
+      route("POST", `${A}/driver-bonus/${kind}`, "driver-bonus", ({ body, user }) => {
+        if (!str(body, "name") || !Array.isArray(body.tiers) || body.tiers.length === 0) throw invalid("name et tiers obligatoires");
+        const c: MockBonus = { id: newId("bc"), name: str(body, "name"), description: null, vehicleCategory: str(body, "vehicleCategory") || "ALL", isActive: false, tiers: body.tiers as Array<Record<string, unknown>>, ...(typeof body.minRidesPerMonth === "number" ? { minRidesPerMonth: body.minRidesPerMonth } : {}) };
+        list.push(c);
+        audit(user, "Argent", `Prime « ${c.name} » créée`);
+        return { id: c.id };
+      }),
+      route("PUT", `${A}/driver-bonus/${kind}/:id`, "driver-bonus", ({ params, body, user }) => {
+        const c = find(list, (x) => x.id === params.id);
+        if (Array.isArray(body.tiers) && body.tiers.length === 0) throw invalid("tiers ne peut pas être vide");
+        Object.assign(c, { name: str(body, "name") || c.name, ...(Array.isArray(body.tiers) ? { tiers: body.tiers } : {}), ...(typeof body.minRidesPerMonth === "number" ? { minRidesPerMonth: body.minRidesPerMonth } : {}) });
+        audit(user, "Argent", `Prime « ${c.name} » modifiée`);
+        return { id: c.id };
+      }),
       route("DELETE", `${A}/driver-bonus/${kind}/:id`, "driver-bonus", ({ params, user }) => {
         const c = find(list, (x) => x.id === params.id);
         if (c.isActive) throw invalid("Cannot delete an active configuration");
