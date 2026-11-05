@@ -1,8 +1,8 @@
 import "server-only";
 import { audit, db, newId } from "../db";
-import { find, matches, num, replace, requireText, str } from "../helpers";
+import { find, num, replace, requireText, str } from "../helpers";
 import { invalid, route, type MockRoute } from "../router";
-import type { Challenge, Driver } from "../seed-types";
+import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
 
@@ -34,22 +34,42 @@ export const networkRoutes: MockRoute[] = [
   }),
 
   // ── Chauffeurs et livreurs ──
+  // Même contrat que le backend WAMI (GET /api/admin/drivers, PATCH …/suspend et …/reactivate).
   route("GET", `${A}/drivers`, "drivers", ({ query }) => {
     const d = db();
-    if (query.get("withoutVehicle")) {
-      const withVehicle = new Set(d.vehicles.map((v) => v.driverId).filter(Boolean));
-      return d.drivers.filter((x) => x.status === "active" && !withVehicle.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
-    }
-    const q = query.get("q") ?? "";
-    return d.drivers.filter((x) => matches(q, x.name, x.phone, x.vehicle));
+    const status = query.get("status");
+    const drivers = d.drivers.map((x) => {
+      const v = d.vehicles.find((veh) => veh.driverId === x.id);
+      const [firstName = "", ...rest] = x.name.split(" ");
+      return {
+        driverId: x.id,
+        firstName,
+        lastName: rest.join(" "),
+        phoneNumber: x.phone,
+        status: x.status !== "active" ? "SUSPENDED" : x.online ? "AVAILABLE" : "OFFLINE",
+        driverType: x.activities.length === 2 ? "BOTH" : x.activities[0] === "courier" ? "DELIVERY" : "VTC",
+        rating: x.rating,
+        totalRides: x.missionsTotal,
+        vehicle: v ? { make: v.kind, model: v.model, color: "", licensePlate: v.plate } : null,
+        createdAt: x.joinedAt,
+      };
+    });
+    const filtered = status ? drivers.filter((x) => x.status === status) : drivers;
+    return { drivers: filtered, total: filtered.length };
   }),
-  route("POST", `${A}/drivers/:id/status`, "drivers", ({ params, body, user }) => {
+  route("PATCH", `${A}/drivers/:id/suspend`, "drivers", ({ params, body, user }) => {
     const d = find(db().drivers, (x) => x.id === params.id);
-    const status = str(body, "status") as Driver["status"];
     const reason = str(body, "reason");
-    if (status === "suspended") requireText(reason, 10, "Motif de suspension obligatoire.");
-    audit(user, "Comptes", `${status === "suspended" ? "A suspendu" : "A réactivé"} ${d.name}${reason ? ` · ${reason}` : ""}`);
-    return replace(db().drivers, (x) => x.id === d.id, { ...d, status, online: false, suspensionReason: status === "suspended" ? reason : null });
+    requireText(reason, 1, "reason is required");
+    audit(user, "Comptes", `A suspendu ${d.name} · ${reason}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, status: "suspended", online: false, suspensionReason: reason });
+    return { driverId: d.id, status: "SUSPENDED", message: `Driver suspended: ${reason}` };
+  }),
+  route("PATCH", `${A}/drivers/:id/reactivate`, "drivers", ({ params, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
+    audit(user, "Comptes", `A réactivé ${d.name}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, status: "active", online: false, suspensionReason: null });
+    return { driverId: d.id, status: "OFFLINE", message: "Driver reactivated successfully" };
   }),
 
   // ── Véhicules ──

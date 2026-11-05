@@ -5,7 +5,8 @@
  * `app/api/v1/[...path]/route.ts` les relaie au backend (`WAMI_API_URL`)
  * ou, sans backend, aux données fictives de `app/api/_proxy/mock`.
  *
- * Chemins et formats : À VALIDER avec l'équipe backend.
+ * Les routes marquées « réel » existent dans le backend `wami-co` (voir `app/api/_proxy/backend/declared.ts`) ;
+ * les autres sont servies par le faux backend.
  */
 const A = "/v1/admin";
 
@@ -52,7 +53,8 @@ export const API = {
   },
   drivers: {
     list: `${A}/drivers`,
-    status: (id: string) => `${A}/drivers/${id}/status`,
+    suspend: (id: string) => `${A}/drivers/${id}/suspend`,
+    reactivate: (id: string) => `${A}/drivers/${id}/reactivate`,
   },
   vehicles: {
     list: `${A}/vehicles`,

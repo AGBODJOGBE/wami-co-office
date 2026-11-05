@@ -49,7 +49,7 @@ export function DriversView() {
                     ),
                   },
                   { key: "rating", header: "Note", align: "right", render: (d) => d.rating.toFixed(1).replace(".", ",") },
-                  { key: "acc", header: "Acceptation", align: "right", render: (d) => percent(d.acceptanceRate) },
+                  { key: "acc", header: "Acceptation", align: "right", render: (d) => (d.acceptanceRate === null ? "—" : percent(d.acceptanceRate)) },
                   { key: "missions", header: "Missions", align: "right", render: (d) => d.missionsTotal.toLocaleString("fr-FR") },
                   { key: "flags", header: "Alertes", render: (d) => riskFlags(d).join(" · ") || "—" },
                 ]}
@@ -88,7 +88,7 @@ function DriverPanel({ driver, onChange }: { driver: Driver; onChange: (d: Drive
       <InfoRow label="Partenaire depuis">{dayMonth(driver.joinedAt)}</InfoRow>
       <InfoRow label="Statut">{DRIVER_STATUS_LABELS[driver.status]}</InfoRow>
       {driver.suspensionReason ? <InfoRow label="Motif">{driver.suspensionReason}</InfoRow> : null}
-      <InfoRow label="Pièces bientôt expirées">{String(driver.documentsExpiringSoon)}</InfoRow>
+      <InfoRow label="Pièces bientôt expirées">{driver.documentsExpiringSoon === null ? "—" : String(driver.documentsExpiringSoon)}</InfoRow>
       {driver.status === "active" ? (
         <Button className="mt-2" tone="danger" disabled={!canWrite} onClick={() => setOpen(true)}>
           Suspendre…

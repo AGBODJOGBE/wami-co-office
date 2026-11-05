@@ -17,11 +17,12 @@ export interface Driver {
   status: DriverStatus;
   online: boolean;
   rating: number;
-  acceptanceRate: number;
+  /** Non fourni par le backend actuel : null = inconnu. */
+  acceptanceRate: number | null;
   missionsTotal: number;
   joinedAt: string;
   /** Pièces qui expirent dans les 30 jours. */
-  documentsExpiringSoon: number;
+  documentsExpiringSoon: number | null;
   suspensionReason: string | null;
 }
 
@@ -29,8 +30,8 @@ export interface Driver {
 export function riskFlags(d: Driver): string[] {
   const flags: string[] = [];
   if (d.rating < 4.2) flags.push("Note basse");
-  if (d.acceptanceRate < 0.6) flags.push("Refuse beaucoup d’offres");
-  if (d.documentsExpiringSoon > 0) flags.push("Pièce bientôt expirée");
+  if (d.acceptanceRate !== null && d.acceptanceRate < 0.6) flags.push("Refuse beaucoup d’offres");
+  if ((d.documentsExpiringSoon ?? 0) > 0) flags.push("Pièce bientôt expirée");
   return flags;
 }
 
