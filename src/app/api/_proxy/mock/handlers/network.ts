@@ -97,6 +97,16 @@ export const networkRoutes: MockRoute[] = [
     });
     return { drivers, total: drivers.length };
   }),
+  route("PATCH", `${A}/drivers/:id/info`, "drivers", ({ params, body, user }) => {
+    const d = find(db().drivers, (x) => x.id === params.id);
+    const [first = "", ...rest] = d.name.split(" ");
+    const firstName = str(body, "firstName") || first;
+    const lastName = str(body, "lastName") || rest.join(" ");
+    const phone = str(body, "phoneNumber") || d.phone;
+    audit(user, "Comptes", `A modifié les informations de ${d.name}`);
+    replace(db().drivers, (x) => x.id === d.id, { ...d, name: `${firstName} ${lastName}`.trim(), phone });
+    return { driverId: d.id, userId: d.id, firstName, lastName, phoneNumber: phone, isPhoneVerified: !str(body, "phoneNumber"), isEmailVerified: false, message: "Driver info updated" };
+  }),
   route("PATCH", `${A}/drivers/:id/driver-type`, "drivers", ({ params, body, user }) => {
     const d = find(db().drivers, (x) => x.id === params.id);
     const t = str(body, "driverType");

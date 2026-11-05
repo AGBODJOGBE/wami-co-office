@@ -146,3 +146,6 @@ for (const kind of ["config", "activity-config", "quality-config"]) {
   declareReal("POST", `/v1/admin/driver-bonus/${kind}`);
   declareReal("PUT", `/v1/admin/driver-bonus/${kind}/:id`);
 }
+
+// Chauffeurs : modification des informations
+declareReal("PATCH", "/v1/admin/drivers/:id/info");

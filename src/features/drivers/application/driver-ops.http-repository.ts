@@ -1,6 +1,6 @@
 import { API } from "@/shared/config/api-routes";
 import { http } from "@/shared/lib/http";
-import type { DriverSessions, DriverType, OnlineDriver, PendingDriver } from "../domain/driver-ops";
+import { infoBody, type DriverInfoDraft, type DriverSessions, DriverType, OnlineDriver, PendingDriver } from "../domain/driver-ops";
 import type { DriverOpsRepository } from "../domain/driver-ops.repository";
 
 export interface BackendOnline {
@@ -48,5 +48,8 @@ export class HttpDriverOpsRepository implements DriverOpsRepository {
   async sessions(id: string): Promise<DriverSessions> {
     const r = await http.get<{ sessions: Array<{ id: string; startedAt: string; endedAt: string | null; durationSeconds: number | null; endReason: string | null }>; totalDurationSeconds: number }>(API.drivers.sessions(id), { limit: 20 });
     return { sessions: r.sessions, totalSeconds: r.totalDurationSeconds };
+  }
+  async updateInfo(id: string, d: DriverInfoDraft, original: DriverInfoDraft) {
+    await http.patch(API.drivers.info(id), infoBody(d, original));
   }
 }

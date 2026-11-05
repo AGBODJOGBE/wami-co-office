@@ -1,14 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
 import { dateTime, dayMonth } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
-import { Button, Card, CardHeader, fieldClass, Note, Tag } from "@/shared/ui/primitives";
+import { Dialog } from "@/shared/ui/dialog";
+import { Button, Card, CardHeader, Field, fieldClass, Note, Tag } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { driverOpsUseCases } from "../application/driver-ops.use-cases";
-import { DRIVER_TYPE_LABELS, END_REASON_LABELS, hoursLabel, type DriverSession, type DriverType, type OnlineDriver, type PendingDriver } from "../domain/driver-ops";
+import { infoFrom, type DriverInfoDraft, DRIVER_TYPE_LABELS, END_REASON_LABELS, hoursLabel, type DriverSession, type DriverType, type OnlineDriver, type PendingDriver } from "../domain/driver-ops";
 
 /** Chauffeurs actuellement en ligne, avec leur dernière position. */
 export function OnlineDriversPanel() {
@@ -132,5 +134,73 @@ export function DriverSessionsPanel({ driverId }: { driverId: string }) {
         )}
       </ResourceView>
     </div>
+  );
+}
+
+/** Modification des informations personnelles d'un chauffeur (le backend ne modifie que les champs envoyés). */
+export function EditDriverInfoButton({ driverId, name, phone }: { driverId: string; name: string; phone: string }) {
+  const canWrite = useCanWrite("drivers");
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button disabled={!canWrite} onClick={() => setOpen(true)}>
+        Modifier les informations…
+      </Button>
+      {open ? <InfoDialog driverId={driverId} original={infoFrom(name, phone)} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+function InfoDialog({ driverId, original, onClose }: { driverId: string; original: DriverInfoDraft; onClose: () => void }) {
+  const [d, setD] = useState<DriverInfoDraft>(original);
+  const { busy, run } = useAction();
+  const set = <K extends keyof DriverInfoDraft>(k: K, v: DriverInfoDraft[K]) => setD({ ...d, [k]: v });
+  const text = (k: keyof DriverInfoDraft, label: string, hint?: string) => (
+    <Field label={label} hint={hint}>
+      <input className={fieldClass} value={d[k]} onChange={(e) => set(k, e.target.value as never)} />
+    </Field>
+  );
+  return (
+    <Dialog
+      open
+      title="Modifier les informations"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Annuler</Button>
+          <Button
+            tone="primary"
+            busy={busy}
+            onClick={async () => {
+              const r = await run(() => driverOpsUseCases.updateInfo(driverId, d, original), "Informations modifiées.");
+              if (r !== undefined) onClose();
+            }}
+          >
+            Enregistrer
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        {text("firstName", "Prénom")}
+        {text("lastName", "Nom")}
+        {text("phoneNumber", "Téléphone", "Le numéro devra être vérifié de nouveau.")}
+        {text("email", "E-mail")}
+      </div>
+      <Field label="Genre">
+        <select className={fieldClass} value={d.gender} onChange={(e) => set("gender", e.target.value as DriverInfoDraft["gender"])}>
+          <option value="">Inchangé</option>
+          <option value="MALE">Homme</option>
+          <option value="FEMALE">Femme</option>
+        </select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        {text("city", "Ville", "Adresse : ville et quartier obligatoires.")}
+        {text("quarter", "Quartier")}
+        {text("street", "Rue")}
+        {text("landmark", "Repère")}
+      </div>
+      <Note>Seuls les champs modifiés sont envoyés. Le nom, l’e-mail et le téléphone du chauffeur ne sont pas relus par la liste du backend : vérifiez-les avant d’enregistrer.</Note>
+    </Dialog>
   );
 }

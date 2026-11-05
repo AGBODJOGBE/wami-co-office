@@ -1,5 +1,5 @@
 import { fail, guard } from "@/shared/lib/result";
-import { approveBlocker, typeBlocker, type DriverType, type PendingDriver } from "../domain/driver-ops";
+import { infoBlocker, approveBlocker, typeBlocker, type DriverInfoDraft, type DriverType, type PendingDriver } from "../domain/driver-ops";
 import type { DriverOpsRepository } from "../domain/driver-ops.repository";
 import { HttpDriverOpsRepository } from "./driver-ops.http-repository";
 
@@ -12,6 +12,11 @@ export function createDriverOpsUseCases(repo: DriverOpsRepository) {
       const blocker = approveBlocker(p);
       if (blocker) return fail("validation", blocker);
       return guard(() => repo.approve(p.id));
+    },
+    updateInfo: async (id: string, d: DriverInfoDraft, original: DriverInfoDraft) => {
+      const blocker = infoBlocker(d, original);
+      if (blocker) return fail("validation", blocker);
+      return guard(() => repo.updateInfo(id, d, original));
     },
     setType: async (id: string, current: DriverType, next: DriverType) => {
       const blocker = typeBlocker(current, next);

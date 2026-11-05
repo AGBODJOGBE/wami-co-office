@@ -12,7 +12,7 @@ import { ResourceView } from "@/shared/ui/resource-view";
 import { driversUseCases } from "../application/drivers.use-cases";
 import { DRIVER_STATUS_LABELS, riskFlags, type Driver } from "../domain/driver";
 import type { DriverType } from "../domain/driver-ops";
-import { DriverSessionsPanel, DriverTypeSelect, OnlineDriversPanel, PendingDriversPanel } from "./driver-ops-panels";
+import { DriverSessionsPanel, EditDriverInfoButton, DriverTypeSelect, OnlineDriversPanel, PendingDriversPanel } from "./driver-ops-panels";
 
 const TABS = [["all", "Tous"], ["online", "En ligne"], ["pending", "Candidatures"]] as const;
 type Tab = (typeof TABS)[number][0];
@@ -117,6 +117,7 @@ function DriverPanel({ driver, onChange }: { driver: Driver; onChange: (d: Drive
           Réactiver
         </Button>
       )}
+      <EditDriverInfoButton driverId={driver.id} name={driver.name} phone={driver.phone} />
       <DriverSessionsPanel driverId={driver.id} />
       <Dialog
         open={open}

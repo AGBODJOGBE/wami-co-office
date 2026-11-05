@@ -20,3 +20,21 @@ describe("opérations chauffeurs (backend wami-co)", () => {
     expect(hoursLabel(1_800)).toBe("30 min");
   });
 });
+
+describe("modification des informations d'un chauffeur", () => {
+  it("n'envoie que les champs modifiés", async () => {
+    const { infoBody, infoFrom } = await import("./driver-ops");
+    const original = infoFrom("Koffi Mensah", "+229 97 00 00 01");
+    const d = { ...original, lastName: "Agbodjo", email: "k@x.bj", city: "Cotonou", quarter: "Akpakpa" };
+    expect(infoBody(d, original)).toEqual({ firstName: undefined, lastName: "Agbodjo", phoneNumber: undefined, email: "k@x.bj", gender: undefined, address: { city: "Cotonou", quarter: "Akpakpa" } });
+  });
+  it("refuse sans changement, téléphone ou e-mail invalides, adresse incomplète", async () => {
+    const { infoBlocker, infoFrom } = await import("./driver-ops");
+    const o = infoFrom("Koffi Mensah", "+229 97 00 00 01");
+    expect(infoBlocker(o, o)).toMatch(/Aucune/);
+    expect(infoBlocker({ ...o, phoneNumber: "12" }, o)).toMatch(/téléphone/);
+    expect(infoBlocker({ ...o, email: "pas-un-mail" }, o)).toMatch(/e-mail/);
+    expect(infoBlocker({ ...o, city: "Cotonou" }, o)).toMatch(/quartier/);
+    expect(infoBlocker({ ...o, lastName: "Agbodjo" }, o)).toBeNull();
+  });
+});

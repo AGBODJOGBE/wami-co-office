@@ -1,4 +1,4 @@
-import type { DriverSessions, DriverType, OnlineDriver, PendingDriver } from "./driver-ops";
+import type { DriverInfoDraft, DriverSessions, DriverType, OnlineDriver, PendingDriver } from "./driver-ops";
 
 export interface DriverOpsRepository {
   pending(): Promise<PendingDriver[]>;
@@ -6,4 +6,5 @@ export interface DriverOpsRepository {
   online(): Promise<OnlineDriver[]>;
   setType(id: string, type: DriverType): Promise<void>;
   sessions(id: string): Promise<DriverSessions>;
+  updateInfo(id: string, d: DriverInfoDraft, original: DriverInfoDraft): Promise<void>;
 }
