@@ -1,0 +1,28 @@
+/**
+ * Types du domaine utilisés par le faux backend (imports de types uniquement :
+ * aucun code des features n'est exécuté côté serveur).
+ */
+export type { Incident, Mission, Overview } from "@/features/live-ops";
+export type { Ride } from "@/features/rides";
+export type { Affiliate } from "@/features/affiliate";
+export type { Delivery } from "@/features/delivery";
+export type { B2bAccount, Invoice } from "@/features/delivery-b2b";
+export type { Courier, Round } from "@/features/rounds";
+export type { ParcelType } from "@/features/parcel-types";
+export type { ServiceCategory } from "@/features/vtc";
+export type { Dossier } from "@/features/documents";
+export type { Driver } from "@/features/drivers";
+export type { Vehicle } from "@/features/vehicles";
+export type { LeaseContract as Contract } from "@/features/contracts";
+export type { Challenge } from "@/features/driver-bonus";
+export type { Establishment } from "@/features/establishments";
+export type { Ticket } from "@/features/support";
+export type { Wallet } from "@/features/wallet";
+export type { FinanceSummary, PayoutBatch } from "@/features/finance";
+export type { PromoCode } from "@/features/promo-codes";
+export type { Referral, ReferralProgram } from "@/features/referrals";
+export type { Campaign } from "@/features/notifications";
+export type { Commission, Tariff, Zone } from "@/features/pricing-zones";
+export type { AuditEntry, Member } from "@/features/rbac";
+export type { PlatformSettings } from "@/features/settings";
+export type { SearchHit } from "@/features/search";

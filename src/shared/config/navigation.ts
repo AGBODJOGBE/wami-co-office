@@ -1,0 +1,65 @@
+import type { Module } from "@/shared/auth/permissions";
+
+export interface NavItem {
+  module: Module;
+  href: string;
+  label: string;
+}
+
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+/** Menu latéral. Chaque entrée n'apparaît que si le rôle a accès au module. */
+export const NAVIGATION: NavGroup[] = [
+  { label: "Pilotage", items: [{ module: "dashboard", href: "/", label: "Tableau de bord" }] },
+  {
+    label: "Opérations",
+    items: [
+      { module: "live-ops", href: "/live-ops", label: "En direct et incidents" },
+      { module: "rides", href: "/rides", label: "Courses" },
+      { module: "delivery", href: "/delivery", label: "Livraisons" },
+      { module: "rounds", href: "/rounds", label: "Tournées" },
+    ],
+  },
+  {
+    label: "Réseau",
+    items: [
+      { module: "documents", href: "/documents", label: "Vérifications" },
+      { module: "drivers", href: "/drivers", label: "Chauffeurs et livreurs" },
+      { module: "vehicles", href: "/vehicles", label: "Véhicules" },
+      { module: "contracts", href: "/contracts", label: "Contrats location-vente" },
+      { module: "driver-bonus", href: "/driver-bonus", label: "Primes chauffeurs" },
+      { module: "establishments", href: "/establishments", label: "Établissements" },
+    ],
+  },
+  {
+    label: "Clients",
+    items: [
+      { module: "support", href: "/support", label: "Support et litiges" },
+      { module: "delivery-b2b", href: "/delivery-b2b", label: "Comptes entreprises" },
+      { module: "referrals", href: "/referrals", label: "Parrainage" },
+      { module: "notifications", href: "/notifications", label: "Notifications" },
+    ],
+  },
+  {
+    label: "Argent",
+    items: [
+      { module: "finance", href: "/finance", label: "Finances et versements" },
+      { module: "wallet", href: "/wallet", label: "Portefeuilles" },
+      { module: "affiliate", href: "/affiliate", label: "Affiliation" },
+      { module: "promo-codes", href: "/promo-codes", label: "Codes promo" },
+    ],
+  },
+  {
+    label: "Réglages",
+    items: [
+      { module: "pricing-zones", href: "/pricing-zones", label: "Tarifs et zones" },
+      { module: "vtc", href: "/vtc", label: "Offres VTC" },
+      { module: "parcel-types", href: "/parcel-types", label: "Types de colis" },
+      { module: "rbac", href: "/rbac", label: "Rôles et journal" },
+      { module: "settings", href: "/settings", label: "Paramètres" },
+    ],
+  },
+];
