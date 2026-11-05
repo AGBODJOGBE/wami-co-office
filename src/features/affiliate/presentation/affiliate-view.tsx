@@ -9,6 +9,7 @@ import { DataTable } from "@/shared/ui/data-table";
 import { Dialog } from "@/shared/ui/dialog";
 import { Button, Card, Field, fieldClass, Kpi, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
+import { AffiliateConfigCard, CreateAffiliateDialog, SkipsPanel, StatementDialog } from "./affiliate-ops-panels";
 import { affiliateUseCases } from "../application/affiliate.use-cases";
 import { AFFILIATE_STATUS_LABELS, MIN_AFFILIATE_PAYOUT, type Affiliate, type SuspensionMode } from "../domain/affiliate";
 
@@ -19,11 +20,18 @@ export function AffiliateView() {
   const list = useResource(() => affiliateUseCases.list(), "affiliates");
   const canWrite = useCanWrite("affiliate");
   const [dialog, setDialog] = useState<{ affiliate: Affiliate; action: Action } | null>(null);
+  const [statementOf, setStatementOf] = useState<Affiliate | null>(null);
+  const [creating, setCreating] = useState(false);
   const { busy, run } = useAction();
 
   return (
     <>
-      <PageHeader title="Affiliation" />
+      <PageHeader title="Affiliation">
+        <Button tone="primary" className="ml-auto" disabled={!canWrite} onClick={() => setCreating(true)}>
+          Nouvel affilié
+        </Button>
+      </PageHeader>
+      <AffiliateConfigCard />
       <ResourceView state={list} onRetry={list.reload}>
         {(rows) => (
           <>
@@ -64,6 +72,9 @@ export function AffiliateView() {
                             Verser {fcfa(a.outstanding)}
                           </Button>
                         ) : null}
+                        <Button size="sm" onClick={() => setStatementOf(a)}>
+                          Relevé
+                        </Button>
                         <Button size="sm" disabled={!canWrite || a.status === "closed"} onClick={() => setDialog({ affiliate: a, action: "rate" })}>
                           Taux
                         </Button>
@@ -102,6 +113,17 @@ export function AffiliateView() {
           </>
         )}
       </ResourceView>
+      <SkipsPanel />
+      {statementOf ? <StatementDialog affiliate={statementOf} onClose={() => setStatementOf(null)} /> : null}
+      {creating ? (
+        <CreateAffiliateDialog
+          onClose={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            list.reload();
+          }}
+        />
+      ) : null}
       <Note>Les commissions sont versées via une demande de retrait, à valider dans « Retraits ». Taux par défaut, conditions d’éligibilité et contrat d’apporteur : à valider.</Note>
       {dialog ? (
         <ActionDialog

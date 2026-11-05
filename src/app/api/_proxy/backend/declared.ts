@@ -149,3 +149,14 @@ for (const kind of ["config", "activity-config", "quality-config"]) {
 
 // Chauffeurs : modification des informations
 declareReal("PATCH", "/v1/admin/drivers/:id/info");
+
+// Affiliation : configuration, création, relevé, commissions et commissions ignorées
+declareReal("GET", "/v1/admin/affiliates/config");
+declareReal("PATCH", "/v1/admin/affiliates/config");
+declareReal("GET", "/v1/admin/affiliates/eligibility");
+declareReal("POST", "/v1/admin/affiliates");
+declareReal("GET", "/v1/admin/affiliates/commission-skips");
+declareReal("GET", "/v1/admin/affiliates/commissions/:id");
+declareReal("POST", "/v1/admin/affiliates/commissions/:id/hold");
+declareReal("POST", "/v1/admin/affiliates/commissions/:id/release");
+declareReal("POST", "/v1/admin/affiliates/commissions/:id/cancel");

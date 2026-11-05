@@ -6,6 +6,10 @@ import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
+const mockAffiliateConfig = { defaultCommissionRate: 0.1, minPayoutAmount: 5000 };
+const mockHeld = new Set<string>();
+const mockCancelled = new Set<string>();
+
 const mockWalletConfig: Record<string, unknown> = { consolidationEnabled: true, consolidationFeeRate: 0.01, consolidationMinAmount: 1000, p2pTransferEnabled: true, p2pTransferFeeRate: 0.01, p2pMinimumAmount: 500, withdrawalMinMobileMoney: 1000, withdrawalMinBankTransfer: 10_000, grantMaxPerBeneficiary: 50_000, grantMaxTotal: 5_000_000, grantMaxBeneficiaries: 2000 };
 const mockWelcomeBonus = { bonusAmountFcfa: 5000, maxEligibleDrivers: 500, consumedCount: 212, isActive: true };
 
@@ -356,6 +360,61 @@ export const moneyRoutes: MockRoute[] = [
       return { affiliateId: a.id, status: status.toUpperCase() };
     }),
   ),
+  // Configuration, éligibilité, création, relevé, commissions et commissions ignorées (contrat du backend WAMI).
+  route("GET", `${A}/affiliates/config`, "affiliate", () => mockAffiliateConfig),
+  route("PATCH", `${A}/affiliates/config`, "affiliate", ({ body, user }) => {
+    if (typeof body.defaultCommissionRate === "number") mockAffiliateConfig.defaultCommissionRate = body.defaultCommissionRate;
+    if (typeof body.minPayoutAmount === "number") mockAffiliateConfig.minPayoutAmount = body.minPayoutAmount;
+    audit(user, "Réglages", "Règles d’affiliation modifiées");
+    return mockAffiliateConfig;
+  }),
+  route("GET", `${A}/affiliates/eligibility`, "affiliate", ({ query }) => {
+    const phone = (query.get("phoneNumber") ?? "").replace(/\D/g, "");
+    if (db().affiliates.some((a) => a.phone.replace(/\D/g, "") === phone)) return { status: "ALREADY_AFFILIATE", userId: null, displayName: null };
+    if (phone.endsWith("0000")) return { status: "NO_ACCOUNT", userId: null, displayName: null };
+    return { status: "ELIGIBLE", userId: "u-new", displayName: "Nouvelle personne" };
+  }),
+  route("POST", `${A}/affiliates`, "affiliate", ({ body, user }) => {
+    if (!str(body, "phoneNumber") || !str(body, "name") || !str(body, "socialNetwork")) throw invalid("phoneNumber, name et socialNetwork obligatoires");
+    const a = { id: newId("af"), name: str(body, "name"), kind: "individual" as const, phone: str(body, "phoneNumber"), code: str(body, "name").toUpperCase().replace(/\W/g, "").slice(0, 8), activations: 0, pending: 0, ratePerActivation: 5000, paid: 0, status: "active" as const, commissionRate: typeof body.commissionRate === "number" ? body.commissionRate : null };
+    db().affiliates.push(a);
+    audit(user, "Argent", `Affilié ${a.name} créé`);
+    return { userId: "u-new", affiliateId: a.id, walletId: "w-new", name: a.name, status: "ACTIVE", message: "Affiliate profile created" };
+  }),
+  route("GET", `${A}/affiliates/commission-skips`, "affiliate", () => ({
+    items: [{ skipId: "sk-1", affiliateId: "af-2", promoCodeId: "p1", userId: "u1", sourceType: "RIDE", sourceId: "r1", vertical: "TRANSPORT", reason: "NEGATIVE_MARGIN", platformCommission: 120, potentialAmount: 300, maxAllowedAmount: 120, rawAmount: 300, wasCapped: true, cappingShortfall: 180, appliedAt: new Date().toISOString(), recordedAt: new Date().toISOString(), resolvedAt: null, resolvedCommissionId: null }],
+    pagination: { total: 1, limit: 50, offset: 0 },
+  })),
+  route("GET", `${A}/affiliates/:id`, "affiliate", ({ params }) => {
+    const a = find(db().affiliates, (x) => x.id === params.id, "Affilié introuvable.");
+    const accrued = a.activations * a.ratePerActivation;
+    return {
+      affiliateId: a.id, name: a.name, phoneNumber: a.phone, status: a.status.toUpperCase(), suspensionReason: a.status === "suspended" ? "Pause demandée" : null,
+      statement: {
+        affiliateId: a.id,
+        byStatus: [{ status: "ACCRUED", count: 2, totalAmount: accrued, totalPayableAmount: accrued, totalPaidAmount: a.paid }],
+        totals: { totalAccrued: accrued, totalPayable: accrued, totalPaid: a.paid, outstandingPayable: Math.max(0, accrued - a.paid), heldOutstanding: mockHeld.size ? 2000 : 0, totalCancelled: 0 },
+        minPayoutAmount: mockAffiliateConfig.minPayoutAmount, walletBalance: { affiliateBalance: Math.max(0, accrued - a.paid) },
+        lines: [
+          { commissionId: `${a.id}-c1`, sourceType: "RIDE", sourceId: "r1", amount: 2000, payableAmount: 2000, paidAmount: 0, outstandingPayableAmount: 2000, appliedRate: 0.1, rateSource: "DEFAULT", status: mockCancelled.has(`${a.id}-c1`) ? "CANCELLED" : "ACCRUED", accruedAt: new Date().toISOString(), paidAt: null, lastPayoutRef: null, held: mockHeld.has(`${a.id}-c1`) },
+          { commissionId: `${a.id}-c2`, sourceType: "DELIVERY_B2C", sourceId: "d1", amount: 1500, payableAmount: 1500, paidAmount: 1500, outstandingPayableAmount: 0, appliedRate: 0.1, rateSource: "DEFAULT", status: "PAID", accruedAt: new Date().toISOString(), paidAt: new Date().toISOString(), lastPayoutRef: "W1", held: false },
+        ],
+        pagination: { total: 2, limit: 50, offset: 0 },
+      },
+    };
+  }),
+  ...(["hold", "release", "cancel"] as const).map((action) =>
+    route("POST", `${A}/affiliates/commissions/:id/${action}`, "affiliate", ({ params, body, user }) => {
+      if (action !== "release" && !str(body, "reason").trim()) throw invalid("reason est obligatoire");
+      const id = params.id!;
+      if (action === "hold") mockHeld.add(id);
+      if (action === "release") mockHeld.delete(id);
+      if (action === "cancel") mockCancelled.add(id);
+      audit(user, "Argent", `Commission ${id} : ${action}`);
+      return { commissionId: id };
+    }),
+  ),
+
   // Route absente du backend (faux backend) : versement direct.
   route("POST", `${A}/affiliates/:id/payouts`, "affiliate", ({ params, body, user }) => {
     const a = find(db().affiliates, (x) => x.id === params.id, "Route absente du backend : le versement ne marche que sur les affiliés fictifs.");
