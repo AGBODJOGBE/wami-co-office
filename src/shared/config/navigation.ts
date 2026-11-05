@@ -56,6 +56,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "receivables", href: "/receivables", label: "Revenus et créances" },
       { module: "affiliate", href: "/affiliate", label: "Affiliation" },
       { module: "promo-codes", href: "/promo-codes", label: "Codes promo" },
+      { module: "subscription-plans", href: "/subscription-plans", label: "Plans d’abonnement" },
     ],
   },
   {

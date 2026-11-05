@@ -6,6 +6,12 @@ import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Plans d'abonnement de démonstration, prix en CENTIMES comme le backend (150 000 F = 15 000 000). */
+const mockPlans: Array<{ planId: string; name: string; description: string | null; durationInDays: number; deliveryQuota: number | null; onQuotaExhausted: string; price: number; isActive: boolean }> = [
+  { planId: "sp-1", name: "Starter 30 jours", description: "Pour les petits commerces", durationInDays: 30, deliveryQuota: 100, onQuotaExhausted: "BLOCK_NEW_ORDERS", price: 15_000_000, isActive: true },
+  { planId: "sp-2", name: "Pro illimité", description: null, durationInDays: 30, deliveryQuota: null, onQuotaExhausted: "BILL_PER_UNIT", price: 45_000_000, isActive: true },
+];
+
 const mockAffiliateConfig = { defaultCommissionRate: 0.1, minPayoutAmount: 5000 };
 const mockHeld = new Set<string>();
 const mockCancelled = new Set<string>();
@@ -246,6 +252,38 @@ export const moneyRoutes: MockRoute[] = [
     ].filter((p) => !provider || p.provider === provider);
     return { intents, total: intents.length };
   }),
+
+  // Plans d'abonnement (contrat du backend WAMI : /api/admin/subscription-plans ; prix en CENTIMES).
+  route("GET", `${A}/subscription-plans`, "subscription-plans", ({ query }) => mockPlans.filter((p) => query.get("includeInactive") === "true" || p.isActive)),
+  route("POST", `${A}/subscription-plans`, "subscription-plans", ({ body, user }) => {
+    const name = str(body, "name");
+    if (!name) throw invalid("Plan name is required");
+    if (mockPlans.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw invalid("A plan with this name already exists");
+    if (!Number.isInteger(num(body, "price")) || num(body, "price") < 0) throw invalid("Plan price must be a non-negative integer amount in XOF centimes");
+    const p = { planId: newId("sp"), name, description: typeof body.description === "string" ? body.description : null, durationInDays: num(body, "durationInDays"), deliveryQuota: typeof body.deliveryQuota === "number" ? body.deliveryQuota : null, onQuotaExhausted: str(body, "onQuotaExhausted") || "BLOCK_NEW_ORDERS", price: num(body, "price"), isActive: true };
+    mockPlans.push(p);
+    audit(user, "Argent", `Plan d’abonnement « ${name} » créé`);
+    return { planId: p.planId };
+  }),
+  route("PATCH", `${A}/subscription-plans/:id`, "subscription-plans", ({ params, body, user }) => {
+    const p = find(mockPlans, (x) => x.planId === params.id);
+    if (typeof body.name === "string" && body.name.trim()) p.name = body.name.trim();
+    if (typeof body.description === "string" || body.description === null) p.description = body.description as string | null;
+    if (typeof body.durationInDays === "number") p.durationInDays = body.durationInDays;
+    if (typeof body.deliveryQuota === "number" || body.deliveryQuota === null) p.deliveryQuota = body.deliveryQuota as number | null;
+    if (typeof body.onQuotaExhausted === "string") p.onQuotaExhausted = body.onQuotaExhausted;
+    if (typeof body.price === "number") p.price = body.price;
+    audit(user, "Argent", `Plan « ${p.name} » modifié`);
+    return { planId: p.planId };
+  }),
+  ...(["deactivate", "reactivate"] as const).map((action) =>
+    route("PATCH", `${A}/subscription-plans/:id/${action}`, "subscription-plans", ({ params, user }) => {
+      const p = find(mockPlans, (x) => x.planId === params.id);
+      p.isActive = action === "reactivate";
+      audit(user, "Argent", `Plan « ${p.name} » : ${action}`);
+      return { planId: p.planId, isActive: p.isActive };
+    }),
+  ),
 
   // Route absente du backend (faux backend) : ajustement manuel.
   route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {

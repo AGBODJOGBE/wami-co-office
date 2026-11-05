@@ -165,3 +165,10 @@ declareReal("POST", "/v1/admin/affiliates/commissions/:id/cancel");
 declareReal("POST", "/v1/admin/roles");
 declareReal("PATCH", "/v1/admin/roles/:id/permissions");
 declareReal("POST", "/v1/admin/admins/:id/grant-permission");
+
+// Plans d'abonnement livraison (prix en centimes côté backend)
+declareReal("GET", "/v1/admin/subscription-plans");
+declareReal("POST", "/v1/admin/subscription-plans");
+declareReal("PATCH", "/v1/admin/subscription-plans/:id");
+declareReal("PATCH", "/v1/admin/subscription-plans/:id/deactivate");
+declareReal("PATCH", "/v1/admin/subscription-plans/:id/reactivate");

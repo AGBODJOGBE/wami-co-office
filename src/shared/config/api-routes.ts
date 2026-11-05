@@ -45,6 +45,12 @@ export const API = {
     grid: `${A}/pricing-grid`,
     activeGrid: `${A}/pricing-grid/active`,
   },
+  subscriptionPlans: {
+    list: `${A}/subscription-plans`,
+    plan: (id: string) => `${A}/subscription-plans/${id}`,
+    deactivate: (id: string) => `${A}/subscription-plans/${id}/deactivate`,
+    reactivate: (id: string) => `${A}/subscription-plans/${id}/reactivate`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,
