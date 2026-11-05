@@ -49,6 +49,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "finance", href: "/finance", label: "Finances et versements" },
       { module: "wallet", href: "/wallet", label: "Portefeuilles" },
       { module: "withdrawals", href: "/withdrawals", label: "Retraits" },
+      { module: "wallet-grants", href: "/wallet-grants", label: "Dotations" },
       { module: "affiliate", href: "/affiliate", label: "Affiliation" },
       { module: "promo-codes", href: "/promo-codes", label: "Codes promo" },
     ],

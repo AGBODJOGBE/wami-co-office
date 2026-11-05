@@ -84,3 +84,13 @@ declareReal("GET", "/v1/admin/permissions");
 declareReal("GET", "/v1/admin/withdrawals");
 declareReal("PATCH", "/v1/admin/withdrawals/:id/approve");
 declareReal("PATCH", "/v1/admin/withdrawals/:id/reject");
+
+// Dotations de portefeuille
+declareReal("GET", "/v1/admin/wallet/grants");
+declareReal("GET", "/v1/admin/wallet/grants/:id");
+declareReal("POST", "/v1/admin/wallet/grants");
+declareReal("POST", "/v1/admin/wallet/grants/preview");
+declareReal("POST", "/v1/admin/wallet/grants/:id/approve");
+declareReal("POST", "/v1/admin/wallet/grants/:id/reject");
+declareReal("POST", "/v1/admin/wallet/grants/:id/cancel");
+declareReal("POST", "/v1/admin/wallet/grants/:id/retry-failed");

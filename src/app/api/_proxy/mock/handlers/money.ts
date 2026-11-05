@@ -6,6 +6,17 @@ import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
+const grantIds = (body: Record<string, unknown>): string[] => {
+  const t = body.targeting as { beneficiaryIds?: unknown } | undefined;
+  return Array.isArray(t?.beneficiaryIds) ? t.beneficiaryIds.filter((x): x is string => typeof x === "string") : [];
+};
+
+/** Dotations de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockGrants: Array<{ campaignId: string; audience: string; label: string; balanceType: string; amountPerBeneficiary: number; beneficiaryCount: number; totalAmount: number; status: string; createdBy: string; createdAt: string; approvedBy: string | null; creditedCount: number; failedCount: number }> = [
+  { campaignId: "gr-1", audience: "DRIVER", label: "Geste commercial Tabaski", balanceType: "BONUS", amountPerBeneficiary: 2000, beneficiaryCount: 120, totalAmount: 240_000, status: "PENDING_APPROVAL", createdBy: "agent-operations", createdAt: new Date().toISOString(), approvedBy: null, creditedCount: 0, failedCount: 0 },
+  { campaignId: "gr-2", audience: "PASSENGER", label: "Compensation incident réseau", balanceType: "BONUS", amountPerBeneficiary: 500, beneficiaryCount: 300, totalAmount: 150_000, status: "PARTIALLY_FAILED", createdBy: "agent-operations", createdAt: new Date().toISOString(), approvedBy: "agent-finance", creditedCount: 292, failedCount: 8 },
+];
+
 /** Retraits de démonstration (état en mémoire, comme le reste du faux backend). */
 const mockWithdrawals: Array<{ withdrawalId: string; walletId: string; ownerName: string; ownerPhone: string; amount: number; method: string; recipientDetails: { phone?: string }; status: string; reference: string | null; failureReason: string | null; rejectionReason: string | null; sourceBalance: string; affiliateSummary: { outstandingPayable: number } | null; createdAt: string }> = [
   { withdrawalId: "wd-1", walletId: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerPhone: "+229 01 97 00 00 01", amount: 25_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 97 00 00 01" }, status: "AWAITING_APPROVAL", reference: null, failureReason: null, rejectionReason: null, sourceBalance: "MAIN", affiliateSummary: null, createdAt: new Date().toISOString() },
@@ -123,6 +134,45 @@ export const moneyRoutes: MockRoute[] = [
     audit(user, "Argent", `A rejeté le retrait de ${w.amount} F (${w.ownerName}) · ${reason}`);
     return { withdrawalId: w.withdrawalId, status: w.status, refundedAmount: w.amount };
   }),
+
+  // Dotations (contrat du backend WAMI : /api/admin/wallet/grants…).
+  route("GET", `${A}/wallet/grants`, "wallet-grants", ({ query }) => {
+    const status = query.get("status");
+    const campaigns = mockGrants.filter((g) => !status || g.status === status);
+    return { campaigns, total: campaigns.length, page: 1, limit: 100 };
+  }),
+  route("POST", `${A}/wallet/grants/preview`, "wallet-grants", ({ body }) => {
+    const ids = grantIds(body);
+    const amount = num(body, "amountPerBeneficiary");
+    return { beneficiaryCount: ids.length, totalAmount: ids.length * amount, unknownIds: [], beneficiariesInOverdraft: 0, amountAbsorbedByDebt: 0, sample: [], capViolations: amount > 50_000 ? [{ cap: "maxPerBeneficiary", limit: 50_000, actual: amount }] : [], notes: [] };
+  }),
+  route("POST", `${A}/wallet/grants`, "wallet-grants", ({ body, user }) => {
+    const ids = grantIds(body);
+    const amount = num(body, "amountPerBeneficiary");
+    const label = str(body, "label");
+    if (!label || ids.length === 0 || !(amount > 0)) throw invalid("label, amountPerBeneficiary et bénéficiaires obligatoires");
+    const g = { campaignId: newId("gr"), audience: str(body, "audience"), label, balanceType: str(body, "balanceType"), amountPerBeneficiary: amount, beneficiaryCount: ids.length, totalAmount: ids.length * amount, status: "PENDING_APPROVAL", createdBy: user.id, createdAt: new Date().toISOString(), approvedBy: null, creditedCount: 0, failedCount: 0 };
+    mockGrants.unshift(g);
+    audit(user, "Argent", `A demandé la dotation « ${label} » (${g.totalAmount} F)`);
+    return { campaignId: g.campaignId, status: g.status, beneficiaryCount: g.beneficiaryCount, totalAmount: g.totalAmount };
+  }),
+  ...(["approve", "reject", "cancel", "retry-failed"] as const).map((action) =>
+    route("POST", `${A}/wallet/grants/:id/${action}`, "wallet-grants", ({ params, body, user }) => {
+      const g = find(mockGrants, (x) => x.campaignId === params.id);
+      if (action === "reject") requireText(str(body, "reason"), 1, "reason is required");
+      if ((action === "approve" || action === "reject") && g.status !== "PENDING_APPROVAL") throw new MockError(409, "La dotation n’est plus à approuver.", "conflict");
+      if (action === "approve" && g.createdBy === user.id) throw new MockError(409, "Le demandeur ne peut pas approuver sa propre dotation.", "conflict");
+      if (action === "retry-failed" && g.status !== "PARTIALLY_FAILED") throw new MockError(409, "Aucune ligne échouée.", "conflict");
+      g.status = action === "approve" ? "COMPLETED" : action === "reject" ? "REJECTED" : action === "cancel" ? "CANCELLED" : "COMPLETED";
+      if (action === "approve" || action === "retry-failed") {
+        g.creditedCount = g.beneficiaryCount;
+        g.failedCount = 0;
+        g.approvedBy = user.id;
+      }
+      audit(user, "Argent", `Dotation « ${g.label} » : ${action}`);
+      return { campaignId: g.campaignId, status: g.status };
+    }),
+  ),
 
   // Route absente du backend (faux backend) : ajustement manuel.
   route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
