@@ -87,19 +87,68 @@ export const networkRoutes: MockRoute[] = [
     return replace(db().vehicles, (x) => x.id === v.id, { ...v, driverId: d.id, driverName: d.name, status: "inService" });
   }),
 
-  // ── Location-vente ──
-  route("GET", `${A}/lease-contracts`, "contracts", () => db().contracts),
-  route("POST", `${A}/lease-contracts/:id/payments`, "contracts", ({ params, body, user }) => {
+  // ── Location-vente ── (contrat du backend WAMI : /api/admin/contracts…)
+  route("GET", `${A}/contracts`, "contracts", () => {
+    const items = db().contracts.map((c) => {
+      const paid = c.payments.reduce((s, p) => s + p.amount, 0);
+      const elapsed = Math.max(0, Math.min(c.weeks, Math.floor((Date.now() - new Date(c.startDate).getTime()) / (7 * 86_400_000))));
+      const behind = Math.max(0, Math.min(c.totalPrice, elapsed * c.weeklyInstallment) - paid);
+      const [make = "", ...model] = c.vehicleLabel.split(" ");
+      return {
+        id: c.id,
+        driverId: db().drivers.find((d) => d.name === c.driverName)?.id ?? "unknown",
+        dateDebut: c.startDate,
+        dateFinPrevue: new Date(new Date(c.startDate).getTime() + c.weeks * 7 * 86_400_000).toISOString(),
+        frequenceEcheances: "HEBDOMADAIRE",
+        nbEcheances: c.weeks,
+        montantTotal: c.totalPrice,
+        downPayment: c.deposit,
+        montantEcheance: c.weeklyInstallment,
+        montantPaye: paid,
+        montantRestant: Math.max(0, c.totalPrice - paid),
+        statut: c.status === "active" ? "ACTIF" : c.status === "suspended" ? "SUSPENDU" : c.status === "completed" ? "TERMINE" : "ROMPU",
+        nbImpayes: behind > 0 ? Math.ceil(behind / c.weeklyInstallment) : 0,
+        modeRemboursement: "ECHEANCIER",
+        vehicle: { licensePlate: c.plate, make, model: model.join(" ") },
+      };
+    });
+    return { items, total: items.length, page: 1, limit: 100 };
+  }),
+  route("GET", `${A}/contracts/:id/installments`, "contracts", ({ params }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    let credit = c.payments.reduce((s, p) => s + p.amount, 0);
+    const items = Array.from({ length: Math.min(c.weeks, 12) }, (_, i) => {
+      const due = new Date(new Date(c.startDate).getTime() + (i + 1) * 7 * 86_400_000);
+      const paid = Math.min(c.weeklyInstallment, credit);
+      credit -= paid;
+      const status = paid >= c.weeklyInstallment ? "PAYEE" : due.getTime() > Date.now() ? "EN_ATTENTE" : paid > 0 ? "PARTIELLEMENT_RECOUVREE" : "IMPAYEE";
+      return { id: `${c.id}-i${i + 1}`, numero: i + 1, dateEcheance: due.toISOString(), montant: c.weeklyInstallment, montantPaye: paid, statut: status };
+    });
+    return { contractId: c.id, items };
+  }),
+  route("POST", `${A}/contracts/:id/manual-payment`, "contracts", ({ params, body, user }) => {
     const c = find(db().contracts, (x) => x.id === params.id);
     const amount = num(body, "amount");
     const paid = c.payments.reduce((s, p) => s + p.amount, 0);
     if (!(amount > 0) || amount > c.totalPrice - paid) throw invalid("Montant invalide.");
-    const method = (["cash", "momo", "earnings"] as const).find((m) => m === body.method) ?? "momo";
-    const payments = [...c.payments, { id: newId("pay"), date: new Date().toISOString(), amount, method }];
+    requireText(str(body, "reference"), 1, "reference is required");
+    const method = body.paymentMethod === "ESPECES" ? "cash" : "momo";
+    const payments = [...c.payments, { id: newId("pay"), date: new Date().toISOString(), amount, method } as const];
     const settled = payments.reduce((s, p) => s + p.amount, 0) >= c.totalPrice;
     audit(user, "Argent", `A encaissé ${amount} F · contrat ${c.id} (${c.driverName})`);
-    return replace(db().contracts, (x) => x.id === c.id, { ...c, payments, status: settled ? "completed" : c.status });
+    replace(db().contracts, (x) => x.id === c.id, { ...c, payments: [...payments], status: settled ? "completed" : c.status });
+    return { amount, imputedAmount: amount, installmentsSettled: 0, installmentsPartiallyPaid: 0, contractCompleted: settled };
   }),
+  ...(["suspend", "resume", "break"] as const).map((action) =>
+    route("POST", `${A}/contracts/:id/${action}`, "contracts", ({ params, body, user }) => {
+      const c = find(db().contracts, (x) => x.id === params.id);
+      if (action === "break") requireText(str(body, "reason"), 1, "reason is required");
+      const status = action === "suspend" ? "suspended" : action === "resume" ? "active" : "terminated";
+      audit(user, "Argent", `Contrat ${c.id} : ${action}`);
+      replace(db().contracts, (x) => x.id === c.id, { ...c, status });
+      return { id: c.id, statut: status };
+    }),
+  ),
 
   // ── Primes ──
   route("GET", `${A}/driver-bonus/challenges`, "driver-bonus", () => db().challenges),

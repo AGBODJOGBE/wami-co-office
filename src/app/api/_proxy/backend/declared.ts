@@ -21,3 +21,12 @@ declareReal("GET", "/v1/admin/wallets/:id");
 declareReal("PATCH", "/v1/admin/wallets/:id/withdrawals/block");
 declareReal("PATCH", "/v1/admin/wallets/:id/withdrawals/unblock");
 declareReal("GET", "/v1/admin/transactions");
+
+// Contrats de location-vente
+declareReal("GET", "/v1/admin/contracts");
+declareReal("GET", "/v1/admin/contracts/:id");
+declareReal("GET", "/v1/admin/contracts/:id/installments");
+declareReal("POST", "/v1/admin/contracts/:id/manual-payment");
+declareReal("POST", "/v1/admin/contracts/:id/suspend");
+declareReal("POST", "/v1/admin/contracts/:id/resume");
+declareReal("POST", "/v1/admin/contracts/:id/break");

@@ -1,28 +1,43 @@
 /**
- * Contrats de location-vente WAMI-CO : le chauffeur paie le véhicule par
- * versements hebdomadaires et en devient propriétaire une fois soldé.
+ * Contrats de location-vente WAMI-CO : le chauffeur paie le véhicule par échéances
+ * (journalières, hebdomadaires ou mensuelles) et en devient propriétaire une fois soldé.
  */
 
-export interface LeasePayment {
-  id: string;
-  date: string;
-  amount: number;
-  method: "cash" | "momo" | "earnings";
-}
+export type LeaseFrequency = "daily" | "weekly" | "monthly";
+export const LEASE_FREQUENCY_LABELS: Record<LeaseFrequency, string> = { daily: "Journalière", weekly: "Hebdomadaire", monthly: "Mensuelle" };
+
+export type LeaseStatus = "active" | "suspended" | "completed" | "broken";
+export const LEASE_STATUS_LABELS: Record<LeaseStatus, string> = { active: "Actif", suspended: "Suspendu", completed: "Terminé", broken: "Rompu" };
 
 export interface LeaseContract {
   id: string;
+  driverId: string;
   driverName: string;
   vehicleLabel: string;
   plate: string;
   startDate: string;
-  /** Prix total du véhicule (hors apport). */
-  totalPrice: number;
-  deposit: number;
-  weeklyInstallment: number;
-  weeks: number;
-  payments: LeasePayment[];
-  status: "active" | "completed" | "terminated";
+  endDate: string;
+  frequency: LeaseFrequency;
+  installmentCount: number;
+  installmentAmount: number;
+  /** Prix total à rembourser (marge comprise). */
+  totalAmount: number;
+  downPayment: number;
+  paid: number;
+  remaining: number;
+  /** Échéances impayées (le backend bloque le chauffeur à partir d'un seuil). */
+  unpaidCount: number;
+  status: LeaseStatus;
+  repaymentMode: "schedule" | "revenueShare";
+}
+
+export interface LeaseInstallment {
+  id: string;
+  number: number;
+  dueDate: string;
+  amount: number;
+  paid: number;
+  status: "pending" | "paid" | "unpaid" | "partial" | "cancelled" | "recovering";
 }
 
 export type LeaseHealth = "settled" | "upToDate" | "late" | "critical";
@@ -34,33 +49,34 @@ export const LEASE_HEALTH_LABELS: Record<LeaseHealth, string> = {
   critical: "Retard critique",
 };
 
-const WEEK_MS = 7 * 86_400_000;
+/** Retard critique : trois échéances impayées ou plus (seuil de blocage du chauffeur côté backend). */
+export const CRITICAL_UNPAID = 3;
 
-export const paidAmount = (c: LeaseContract) => c.payments.reduce((s, p) => s + p.amount, 0);
+export const paidAmount = (c: LeaseContract) => c.paid;
+export const remaining = (c: LeaseContract) => Math.max(0, c.remaining);
 
-/** Reste à payer sur le prix du véhicule. */
-export const remaining = (c: LeaseContract) => Math.max(0, c.totalPrice - paidAmount(c));
+/** Montant en retard, estimé à partir du nombre d'échéances impayées. */
+export const arrears = (c: LeaseContract) => Math.min(remaining(c), c.unpaidCount * c.installmentAmount);
 
-export function weeksElapsed(c: LeaseContract, now: Date): number {
-  return Math.max(0, Math.min(c.weeks, Math.floor((now.getTime() - new Date(c.startDate).getTime()) / WEEK_MS)));
-}
-
-/** Ce qui aurait dû être payé à date. */
-export const expectedPaid = (c: LeaseContract, now: Date) => Math.min(c.totalPrice, weeksElapsed(c, now) * c.weeklyInstallment);
-
-export const arrears = (c: LeaseContract, now: Date) => Math.max(0, expectedPaid(c, now) - paidAmount(c));
-
-/** Retard critique : trois échéances ou plus (seuil à valider avec WAMI-CO). */
-export function health(c: LeaseContract, now: Date): LeaseHealth {
+export function health(c: LeaseContract): LeaseHealth {
   if (remaining(c) === 0) return "settled";
-  const a = arrears(c, now);
-  if (a === 0) return "upToDate";
-  return a >= 3 * c.weeklyInstallment ? "critical" : "late";
+  if (c.unpaidCount === 0) return "upToDate";
+  return c.unpaidCount >= CRITICAL_UNPAID ? "critical" : "late";
 }
 
-export function paymentBlocker(c: LeaseContract, amount: number): string | null {
+export type PaymentMethod = "cash" | "momo";
+
+export function paymentBlocker(c: LeaseContract, amount: number, reference: string): string | null {
   if (c.status !== "active") return "Ce contrat n’est plus actif.";
   if (!Number.isInteger(amount) || amount <= 0) return "Montant invalide.";
-  if (amount > remaining(c)) return `Le montant dépasse le reste à payer.`;
+  if (amount > remaining(c)) return "Le montant dépasse le reste à payer.";
+  if (reference.trim().length === 0) return "Référence obligatoire (reçu ou numéro de transaction).";
+  return null;
+}
+
+export function transitionBlocker(c: LeaseContract, action: "suspend" | "resume" | "break", reason: string): string | null {
+  if (action === "resume" && c.status !== "suspended") return "Seul un contrat suspendu peut être repris.";
+  if (action !== "resume" && c.status !== "active" && !(action === "break" && c.status === "suspended")) return "Ce contrat n’est pas actif.";
+  if (action === "break" && reason.trim().length < 10) return "Motif de rupture obligatoire (10 caractères minimum).";
   return null;
 }

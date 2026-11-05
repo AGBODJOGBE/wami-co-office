@@ -13,7 +13,20 @@ export type { ServiceCategory } from "@/features/vtc";
 export type { Dossier } from "@/features/documents";
 export type { Driver } from "@/features/drivers";
 export type { Vehicle } from "@/features/vehicles";
-export type { LeaseContract as Contract } from "@/features/contracts";
+/** Contrat tel que stocké par le faux backend (le contrat réseau est converti dans les handlers). */
+export interface Contract {
+  id: string;
+  driverName: string;
+  vehicleLabel: string;
+  plate: string;
+  startDate: string;
+  totalPrice: number;
+  deposit: number;
+  weeklyInstallment: number;
+  weeks: number;
+  payments: Array<{ id: string; date: string; amount: number; method: "cash" | "momo" | "earnings" }>;
+  status: "active" | "suspended" | "completed" | "terminated";
+}
 export type { Challenge } from "@/features/driver-bonus";
 export type { Establishment } from "@/features/establishments";
 export type { Ticket } from "@/features/support";
