@@ -48,6 +48,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { module: "finance", href: "/finance", label: "Finances et versements" },
       { module: "wallet", href: "/wallet", label: "Portefeuilles" },
+      { module: "withdrawals", href: "/withdrawals", label: "Retraits" },
       { module: "affiliate", href: "/affiliate", label: "Affiliation" },
       { module: "promo-codes", href: "/promo-codes", label: "Codes promo" },
     ],

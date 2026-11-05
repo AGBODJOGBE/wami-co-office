@@ -6,6 +6,13 @@ import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Retraits de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockWithdrawals: Array<{ withdrawalId: string; walletId: string; ownerName: string; ownerPhone: string; amount: number; method: string; recipientDetails: { phone?: string }; status: string; reference: string | null; failureReason: string | null; rejectionReason: string | null; sourceBalance: string; affiliateSummary: { outstandingPayable: number } | null; createdAt: string }> = [
+  { withdrawalId: "wd-1", walletId: "w-2", ownerName: "[Chauffeur] Koffi A.", ownerPhone: "+229 01 97 00 00 01", amount: 25_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 97 00 00 01" }, status: "AWAITING_APPROVAL", reference: null, failureReason: null, rejectionReason: null, sourceBalance: "MAIN", affiliateSummary: null, createdAt: new Date().toISOString() },
+  { withdrawalId: "wd-2", walletId: "w-1", ownerName: "[Apporteur] Théophile K.", ownerPhone: "+229 01 96 00 20 20", amount: 40_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 96 00 20 20" }, status: "AWAITING_APPROVAL", reference: null, failureReason: null, rejectionReason: null, sourceBalance: "AFFILIATE", affiliateSummary: { outstandingPayable: 40_000 }, createdAt: new Date().toISOString() },
+  { withdrawalId: "wd-3", walletId: "w-4", ownerName: "Le Palmier", ownerPhone: "+229 01 •• •• 42", amount: 300_000, method: "MOBILE_MONEY", recipientDetails: { phone: "+229 01 •• •• 42" }, status: "COMPLETED", reference: "MOMO-7781", failureReason: null, rejectionReason: null, sourceBalance: "MAIN", affiliateSummary: null, createdAt: new Date().toISOString() },
+];
+
 /** Configurations de parrainage de démonstration (état en mémoire, comme le reste du faux backend). */
 const referralConfigs: Array<{
   id: string;
@@ -91,6 +98,30 @@ export const moneyRoutes: MockRoute[] = [
     audit(user, "Argent", `A débloqué les retraits de ${w.ownerName}`);
     replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: false, withdrawalsBlockedReason: null });
     return { walletId: w.id, withdrawalsBlocked: false, withdrawalsBlockedReason: null, withdrawalsBlockedAt: null, withdrawalsBlockedBy: null };
+  }),
+
+  // Retraits (contrat du backend WAMI : /api/admin/withdrawals, PATCH …/approve|reject).
+  route("GET", `${A}/withdrawals`, "withdrawals", ({ query }) => {
+    const status = query.get("status");
+    const withdrawals = mockWithdrawals.filter((w) => !status || w.status === status);
+    return { withdrawals, total: withdrawals.length, page: 1, limit: 100 };
+  }),
+  route("PATCH", `${A}/withdrawals/:id/approve`, "withdrawals", ({ params, user }) => {
+    const w = find(mockWithdrawals, (x) => x.withdrawalId === params.id);
+    if (w.status !== "AWAITING_APPROVAL") throw invalid("Withdrawal is not awaiting approval");
+    w.status = "PROCESSING";
+    audit(user, "Argent", `A approuvé le retrait de ${w.amount} F (${w.ownerName})`);
+    return { withdrawalId: w.withdrawalId, status: w.status };
+  }),
+  route("PATCH", `${A}/withdrawals/:id/reject`, "withdrawals", ({ params, body, user }) => {
+    const w = find(mockWithdrawals, (x) => x.withdrawalId === params.id);
+    const reason = str(body, "reason");
+    requireText(reason, 1, "reason is required");
+    if (w.status !== "AWAITING_APPROVAL") throw invalid("Withdrawal is not awaiting approval");
+    w.status = "REJECTED";
+    w.rejectionReason = reason;
+    audit(user, "Argent", `A rejeté le retrait de ${w.amount} F (${w.ownerName}) · ${reason}`);
+    return { withdrawalId: w.withdrawalId, status: w.status, refundedAmount: w.amount };
   }),
 
   // Route absente du backend (faux backend) : ajustement manuel.

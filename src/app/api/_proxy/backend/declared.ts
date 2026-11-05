@@ -79,3 +79,8 @@ declareReal("PATCH", "/v1/admin/admins/:id/deactivate");
 declareReal("PATCH", "/v1/admin/admins/:id/reactivate");
 declareReal("GET", "/v1/admin/roles");
 declareReal("GET", "/v1/admin/permissions");
+
+// Retraits
+declareReal("GET", "/v1/admin/withdrawals");
+declareReal("PATCH", "/v1/admin/withdrawals/:id/approve");
+declareReal("PATCH", "/v1/admin/withdrawals/:id/reject");
