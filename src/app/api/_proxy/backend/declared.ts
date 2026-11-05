@@ -176,3 +176,12 @@ declareReal("PATCH", "/v1/admin/subscription-plans/:id/reactivate");
 // Livraisons B2C
 declareReal("GET", "/v1/admin/delivery");
 declareReal("DELETE", "/v1/admin/delivery/:id");
+
+// Contrats : indicateurs, audit, alertes, prélèvement sur les revenus, déblocage
+declareReal("GET", "/v1/admin/contracts/dashboard/kpis");
+declareReal("GET", "/v1/admin/contracts/audit-logs");
+declareReal("GET", "/v1/admin/contracts/revenue-share/alerts");
+declareReal("GET", "/v1/admin/contracts/:id/revenue-share/withholdings");
+declareReal("POST", "/v1/admin/contracts/:id/repayment-mode");
+declareReal("PATCH", "/v1/admin/contracts/:id/revenue-share-rate");
+declareReal("POST", "/v1/admin/contracts/drivers/:id/unblock");

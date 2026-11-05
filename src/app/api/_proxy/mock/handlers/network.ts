@@ -6,6 +6,9 @@ import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Contrats passés en prélèvement sur les revenus (démonstration), avec leur taux. */
+const mockShare = new Map<string, number>();
+
 /** Candidatures de démonstration (état en mémoire, comme le reste du faux backend). */
 const mockPending: Array<{ driverId: string; userId: string; isDocumentsVerified: boolean; createdAt: string }> = [
   { driverId: "cand-1", userId: "u-c1", isDocumentsVerified: true, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() },
@@ -173,7 +176,7 @@ export const networkRoutes: MockRoute[] = [
         montantRestant: Math.max(0, c.totalPrice - paid),
         statut: c.status === "active" ? "ACTIF" : c.status === "suspended" ? "SUSPENDU" : c.status === "completed" ? "TERMINE" : "ROMPU",
         nbImpayes: behind > 0 ? Math.ceil(behind / c.weeklyInstallment) : 0,
-        modeRemboursement: "ECHEANCIER",
+        modeRemboursement: mockShare.has(c.id) ? "PAR_REVENU" : "ECHEANCIER",
         vehicle: { licensePlate: c.plate, make, model: model.join(" ") },
       };
     });
@@ -203,6 +206,44 @@ export const networkRoutes: MockRoute[] = [
     audit(user, "Argent", `A encaissé ${amount} F · contrat ${c.id} (${c.driverName})`);
     replace(db().contracts, (x) => x.id === c.id, { ...c, payments: [...payments], status: settled ? "completed" : c.status });
     return { amount, imputedAmount: amount, installmentsSettled: 0, installmentsPartiallyPaid: 0, contractCompleted: settled };
+  }),
+  route("GET", `${A}/contracts/dashboard/kpis`, "contracts", () => {
+    const list = db().contracts;
+    const paid = list.reduce((t, c) => t + c.payments.reduce((s, p) => s + p.amount, 0), 0);
+    const total = list.reduce((t, c) => t + c.totalPrice, 0);
+    return {
+      contracts: { total: list.length, active: list.filter((c) => c.status === "active").length, suspended: list.filter((c) => c.status === "suspended").length, completed: list.filter((c) => c.status === "completed").length, broken: list.filter((c) => c.status === "terminated").length },
+      financials: { totalMontantTotal: total, totalDownPayment: 0, totalMontantNetAFinancer: total, totalMontantPaye: paid, totalMontantRestant: total - paid, totalResidualDebt: 0 },
+      installments: { enAttente: 20, enRecouvrement: 0, partiellementRecouvree: 0, payee: 23, impayee: 4, annulee: 0, overdueCount: 4 },
+      blocking: { atRiskCount: 1, blockedCount: 1, threshold: 3 },
+    };
+  }),
+  route("GET", `${A}/contracts/audit-logs`, "contracts", () => ({
+    items: db().contracts.slice(0, 3).map((c, i) => ({ id: `au-${i}`, contractId: c.id, driverId: "drv-1", action: i === 0 ? "MANUAL_PAYMENT" : "CONTRACT_CREATED", performedBy: "agent-finance", details: { amount: 15_000, paymentMethod: "ESPECES" }, occurredAt: new Date(Date.now() - i * 86_400_000).toISOString() })),
+    total: 3, page: 1, limit: 50,
+  })),
+  route("GET", `${A}/contracts/revenue-share/alerts`, "contracts", () => ({ items: [{ contractId: "LV-003", driverId: "drv-5", montantNonReconnu: 0, montantRestant: 1_025_000, lastWithholdingDate: null, reasons: ["INACTIVITY"] }], total: 1, page: 1, limit: 50 })),
+  route("GET", `${A}/contracts/:id/revenue-share/withholdings`, "contracts", () => ({ items: [{ transactionId: "wh-1", amount: 3_200, sourceType: "RIDE", sourceId: "r1", date: new Date().toISOString() }], total: 1, page: 1, limit: 50 })),
+  route("POST", `${A}/contracts/:id/repayment-mode`, "contracts", ({ params, body, user }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    if (body.mode !== "PAR_REVENU") throw invalid("mode doit valoir 'PAR_REVENU'");
+    const taux = typeof body.taux === "number" ? body.taux : 0.2;
+    if (!(taux > 0 && taux <= 1)) throw invalid("tauxPrelevementRevenu must satisfy 0 < taux <= 1");
+    mockShare.set(c.id, taux);
+    audit(user, "Argent", `Contrat ${c.id} : prélèvement sur les revenus à ${taux * 100} %`);
+    return { contractId: c.id, modeRemboursement: "PAR_REVENU", tauxPrelevementRevenu: taux, cancelledInstallmentsCount: 12, driverUnblocked: false };
+  }),
+  route("PATCH", `${A}/contracts/:id/revenue-share-rate`, "contracts", ({ params, body, user }) => {
+    const c = find(db().contracts, (x) => x.id === params.id);
+    if (!mockShare.has(c.id)) throw invalid("Contract is not in PAR_REVENU mode");
+    if (typeof body.taux !== "number" || !(body.taux > 0 && body.taux <= 1)) throw invalid("tauxPrelevementRevenu must satisfy 0 < taux <= 1");
+    mockShare.set(c.id, body.taux);
+    audit(user, "Argent", `Contrat ${c.id} : taux de prélèvement ${body.taux * 100} %`);
+    return { contractId: c.id, tauxPrelevementRevenu: body.taux };
+  }),
+  route("POST", `${A}/contracts/drivers/:driverId/unblock`, "contracts", ({ params, user }) => {
+    audit(user, "Argent", `Chauffeur ${params.driverId} débloqué`);
+    return { driverId: params.driverId, status: "OFFLINE" };
   }),
   ...(["suspend", "resume", "break"] as const).map((action) =>
     route("POST", `${A}/contracts/:id/${action}`, "contracts", ({ params, body, user }) => {

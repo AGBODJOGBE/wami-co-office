@@ -9,6 +9,7 @@ import { DataTable } from "@/shared/ui/data-table";
 import { Dialog } from "@/shared/ui/dialog";
 import { Button, Card, Field, fieldClass, InfoRow, Kpi, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
+import { ContractMonitoring, FleetKpisRow, RepaymentPanel } from "./contract-ops-panels";
 import { contractsUseCases } from "../application/contracts.use-cases";
 import { LEASE_FREQUENCY_LABELS, LEASE_HEALTH_LABELS, LEASE_STATUS_LABELS, arrears, health, paidAmount, remaining, type LeaseContract, type LeaseHealth, type LeaseInstallment, type PaymentMethod } from "../domain/lease-contract";
 
@@ -24,6 +25,7 @@ export function ContractsView() {
   return (
     <>
       <PageHeader title="Contrats de location-vente (WAMI-CO)" />
+      <FleetKpisRow />
       <ResourceView state={contracts} onRetry={contracts.reload}>
         {(list) => {
           const active = list.filter((c) => c.status === "active");
@@ -69,7 +71,8 @@ export function ContractsView() {
                   ]}
                 />
               </Card>
-              <Note>Le prélèvement des échéances sur les gains est automatique (côté backend). Pénalités, reprise du véhicule et transfert de la carte grise : à valider avec WAMI-CO.</Note>
+              <ContractMonitoring />
+      <Note>Le prélèvement des échéances sur les gains est automatique (côté backend). Pénalités, reprise du véhicule et transfert de la carte grise : à valider avec WAMI-CO.</Note>
             </>
           );
         }}
@@ -174,6 +177,7 @@ function DetailDialog({ contract, canWrite, onClose, onChanged }: { contract: Le
           />
         )}
       </ResourceView>
+      <RepaymentPanel contract={contract} threshold={3} onChanged={onChanged} />
       {contract.status === "active" || contract.status === "suspended" ? (
         <div className="mt-2 flex flex-col gap-2">
           <Field label="Motif (obligatoire pour une rupture)">
