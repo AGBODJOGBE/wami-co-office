@@ -1,6 +1,6 @@
 import { API } from "@/shared/config/api-routes";
 import { http } from "@/shared/lib/http";
-import type { AdminStatus, AuditEntry, Member, NewMember, RoleInfo } from "../domain/rbac";
+import type { AdminStatus, AuditEntry, Member, NewMember, Permission, RoleInfo } from "../domain/rbac";
 import type { RbacRepository } from "../domain/rbac.repository";
 
 /** Élément de `GET /api/admin/admins` (backend wami-co). */
@@ -39,6 +39,19 @@ export class HttpRbacRepository implements RbacRepository {
   async roles() {
     const { roles } = await http.get<{ roles: RoleInfo[] }>(API.rbac.roles);
     return roles;
+  }
+  async permissions() {
+    const { permissions } = await http.get<{ permissions: Record<string, Array<{ id: string; code: string; name: string }>> }>(API.rbac.permissions);
+    return Object.entries(permissions).flatMap(([module, list]) => list.map((p): Permission => ({ id: p.id, code: p.code, name: p.name, module })));
+  }
+  async createRole(name: string, displayName: string, description: string, permissionIds: string[]) {
+    await http.post(API.rbac.roles, { name, displayName, description, permissionIds });
+  }
+  async updateRolePermissions(roleId: string, add: string[], remove: string[]) {
+    await http.patch(API.rbac.role(roleId), { add, remove });
+  }
+  async grantPermission(adminId: string, code: string) {
+    await http.post(API.rbac.grantPermission(adminId), { permissionCode: code });
   }
   async register(m: NewMember) {
     await http.post(API.rbac.register, { phone: m.phone, password: m.password, firstName: m.firstName, lastName: m.lastName, roleId: m.roleId });

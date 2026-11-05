@@ -160,3 +160,8 @@ declareReal("GET", "/v1/admin/affiliates/commissions/:id");
 declareReal("POST", "/v1/admin/affiliates/commissions/:id/hold");
 declareReal("POST", "/v1/admin/affiliates/commissions/:id/release");
 declareReal("POST", "/v1/admin/affiliates/commissions/:id/cancel");
+
+// Rôles : création, permissions, octroi individuel
+declareReal("POST", "/v1/admin/roles");
+declareReal("PATCH", "/v1/admin/roles/:id/permissions");
+declareReal("POST", "/v1/admin/admins/:id/grant-permission");

@@ -7,6 +7,9 @@ import type { Member, PlatformSettings, Tariff } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Rôles créés en démonstration (état en mémoire, comme le reste du faux backend). */
+const mockExtraRoles: Array<{ id: string; name: string; displayName: string; description: string | null; isSystem: boolean; permissions: Array<{ id: string; code: string; name: string; module: string }> }> = [];
+
 /** Profils et zones de tarification de démonstration (état en mémoire, comme le reste du faux backend). */
 const mockProfiles: Array<{ profileId: string; serviceKey: string; vehicleType: string | null; name: string; description: string | null; strategy: string; isActive: boolean; version: number; activatedAt: string | null; updatedAt: string; commissionRate: number; driverShareRate: number; components: Array<Record<string, unknown>> }> = [
   { profileId: "pp-1", serviceKey: "RIDE", vehicleType: "MOTO", name: "Course moto", description: "Tarif standard moto", strategy: "PER_KM", isActive: true, version: 3, activatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), commissionRate: 0.15, driverShareRate: 0.85, components: [{ type: "FLAT_FEE", key: "base", label: "Prise en charge", value: 300 }, { type: "PER_KM_TIER", key: "km", label: "Prix au km", tiers: [{}, {}] }, { type: "WAITING_FEE", key: "wait", label: "Attente", value: 25, freeUnits: 5 }, { type: "MINIMUM_FARE", key: "min", label: "Course minimum", minimum: 500 }] },
@@ -87,15 +90,49 @@ export const settingsRoutes: MockRoute[] = [
     return { admins, total: admins.length, page: 1, limit: 100 };
   }),
   route("GET", `${A}/roles`, "rbac", () => ({
-    roles: ROLES.map((r) => ({
+    roles: [...mockExtraRoles, ...ROLES.map((r) => ({
       id: r,
-      name: r.toUpperCase(),
+      name: r === "superAdmin" ? "SUPER_ADMIN" : r.toUpperCase(),
       displayName: ROLE_LABELS[r],
       description: null,
       isSystem: true,
-      permissions: MODULES.filter((m) => accessOf(r, m) !== "none").map((m) => ({ id: `${r}-${m}`, code: `${m}.${accessOf(r, m) === "write" ? "manage" : "view"}`, name: m, module: m })),
-    })),
+      permissions: MODULES.filter((m) => accessOf(r, m) !== "none").map((m) => ({ id: `${m}.${accessOf(r, m) === "write" ? "manage" : "view"}`, code: `${m}.${accessOf(r, m) === "write" ? "manage" : "view"}`, name: m, module: m })),
+    }))],
   })),
+  route("GET", `${A}/permissions`, "rbac", () => {
+    const grouped: Record<string, Array<{ id: string; code: string; name: string; category: string }>> = {};
+    for (const m of MODULES) grouped[m] = [{ id: `${m}.view`, code: `${m}.view`, name: `Voir ${m}`, category: "READ" }, { id: `${m}.manage`, code: `${m}.manage`, name: `Gérer ${m}`, category: "WRITE" }];
+    return { permissions: grouped, total: MODULES.length * 2 };
+  }),
+  route("POST", `${A}/roles`, "rbac", ({ body, user }) => {
+    const name = str(body, "name").toUpperCase();
+    if (!name) throw invalid("name is required");
+    if (mockExtraRoles.some((r) => r.name === name) || ROLES.some((r) => r.toUpperCase() === name)) throw invalid(`Role '${name}' already exists`);
+    const ids = Array.isArray(body.permissionIds) ? body.permissionIds.filter((x): x is string => typeof x === "string") : [];
+    const r = { id: name, name, displayName: str(body, "displayName"), description: str(body, "description"), isSystem: false, permissions: ids.map((id) => ({ id, code: id, name: id, module: id.split(".")[0] ?? "" })) };
+    mockExtraRoles.push(r);
+    audit(user, "Comptes", `Rôle ${name} créé`);
+    return { id: r.id, name, displayName: r.displayName, description: r.description, permissionIds: ids, isSystem: false, isActive: true, createdAt: new Date().toISOString() };
+  }),
+  route("PATCH", `${A}/roles/:id/permissions`, "rbac", ({ params, body, user }) => {
+    const add = Array.isArray(body.add) ? body.add.filter((x): x is string => typeof x === "string") : [];
+    const remove = Array.isArray(body.remove) ? body.remove.filter((x): x is string => typeof x === "string") : [];
+    if (add.length === 0 && remove.length === 0) throw invalid("At least one permission code must be provided in add or remove");
+    if (params.id === "superAdmin" && remove.length) throw new MockError(409, "Cannot remove permissions from SUPER_ADMIN role", "conflict");
+    const r = mockExtraRoles.find((x) => x.id === params.id);
+    if (r) {
+      r.permissions = [...r.permissions.filter((p) => !remove.includes(p.code)), ...add.map((c) => ({ id: c, code: c, name: c, module: c.split(".")[0] ?? "" }))];
+    }
+    audit(user, "Comptes", `Permissions du rôle ${params.id} modifiées`);
+    return { roleId: params.id, roleName: params.id, added: add, removed: remove, totalPermissions: r?.permissions.length ?? 0 };
+  }),
+  route("POST", `${A}/admins/:id/grant-permission`, "rbac", ({ params, body, user }) => {
+    const m = find(db().members, (x) => x.id === params.id);
+    const code = str(body, "permissionCode");
+    if (!code) throw invalid("permissionCode is required");
+    audit(user, "Comptes", `Permission ${code} accordée à ${m.name}`);
+    return { adminId: m.id, permissionCode: code, message: "Permission granted" };
+  }),
   route("POST", `${A}/register`, "rbac", ({ body, user }) => {
     const firstName = str(body, "firstName");
     const lastName = str(body, "lastName");

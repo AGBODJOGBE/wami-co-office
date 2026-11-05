@@ -11,6 +11,7 @@ import { Dialog } from "@/shared/ui/dialog";
 import { MissingRoutes } from "@/shared/ui/missing-routes";
 import { Button, Card, CardHeader, Chip, Field, fieldClass, Note, PageHeader, Tag, type Tone } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
+import { GrantDialog, RoleDialog } from "./role-dialogs";
 import { rbacUseCases } from "../application/rbac.use-cases";
 import { ADMIN_STATUS_LABELS, groupByModule, type AdminStatus, type AuditEntry, type Member, type NewMember, type RoleInfo } from "../domain/rbac";
 
@@ -26,6 +27,8 @@ export function RbacView() {
   const canWrite = useCanWrite("rbac");
   const { busy, run } = useAction();
   const [inviting, setInviting] = useState(false);
+  const [roleEditor, setRoleEditor] = useState<RoleInfo | "new" | null>(null);
+  const [granting, setGranting] = useState<Member | null>(null);
 
   return (
     <>
@@ -76,6 +79,10 @@ export function RbacView() {
                       header: "",
                       render: (m) =>
                         m.status === "active" ? (
+                          <span className="flex gap-1.5">
+                          <Button size="sm" disabled={!canWrite || m.id === actingId} onClick={() => setGranting(m)}>
+                            Permission
+                          </Button>
                           <Button
                             size="sm"
                             tone="ghost"
@@ -87,6 +94,7 @@ export function RbacView() {
                           >
                             Désactiver
                           </Button>
+                          </span>
                         ) : (
                           <Button
                             size="sm"
@@ -106,7 +114,11 @@ export function RbacView() {
             </ResourceView>
           </Card>
           <Card className="overflow-hidden">
-            <CardHeader title="Ce que chaque rôle peut faire" />
+            <CardHeader title="Ce que chaque rôle peut faire">
+              <Button size="sm" tone="primary" disabled={!canWrite} onClick={() => setRoleEditor("new")}>
+                Nouveau rôle
+              </Button>
+            </CardHeader>
             <ResourceView state={roles} onRetry={roles.reload}>
               {(list) => (
                 <div className="flex flex-col gap-3 p-4">
@@ -116,6 +128,9 @@ export function RbacView() {
                         {r.displayName} <span className="font-normal text-muted">· {r.permissions.length} permissions</span>
                       </summary>
                       {r.description ? <p className="mt-1 text-xs text-muted">{r.description}</p> : null}
+                      <Button size="sm" className="mt-2" disabled={!canWrite} onClick={() => setRoleEditor(r)}>
+                        Modifier les permissions
+                      </Button>
                       <div className="mt-2 flex flex-col gap-1.5">
                         {groupByModule(r.permissions).map(([module, perms]) => (
                           <div key={module} className="text-xs">
@@ -128,7 +143,6 @@ export function RbacView() {
                 </div>
               )}
             </ResourceView>
-            <Note className="m-4">La création de rôles et la modification de leurs permissions sont possibles côté backend (POST /roles, PATCH /roles/:id/permissions) : écran à venir.</Note>
           </Card>
         </div>
         <Card className="overflow-hidden">
@@ -158,6 +172,18 @@ export function RbacView() {
           <MissingRoutes area="rbac" className="m-4" />
         </Card>
       </div>
+      {roleEditor ? (
+        <RoleDialog
+          role={roleEditor === "new" ? null : roleEditor}
+          roles={roles.data ?? []}
+          onClose={() => setRoleEditor(null)}
+          onDone={() => {
+            setRoleEditor(null);
+            roles.reload();
+          }}
+        />
+      ) : null}
+      {granting ? <GrantDialog member={granting} actingId={actingId} onClose={() => setGranting(null)} /> : null}
       {inviting ? (
         <InviteDialog
           members={members.data ?? []}
