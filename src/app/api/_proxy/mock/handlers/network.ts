@@ -91,6 +91,13 @@ export const networkRoutes: MockRoute[] = [
     return { drivers: filtered, total: filtered.length };
   }),
   // Candidatures, chauffeurs en ligne, type d'activité, sessions (contrat du backend WAMI).
+  route("GET", `${A}/drivers/connection-time`, "drivers", ({ query }) => {
+    const from = query.get("from");
+    const to = query.get("to");
+    if (!from || !to) throw invalid("from et to sont requis (AAAA-MM-JJ)");
+    const days = [from, to].filter((v, i, a) => a.indexOf(v) === i).map((date, i) => ({ date, totalSeconds: 18_000 - i * 3_600, totalHours: 5 - i }));
+    return { from, to, drivers: db().drivers.filter((d) => d.status === "active").slice(0, 3).map((d, i) => ({ driverId: d.id, days, grandTotalSeconds: days.reduce((s, x) => s + x.totalSeconds, 0) - i * 1_800, grandTotalHours: 0 })) };
+  }),
   route("GET", `${A}/drivers/pending`, "drivers", () => ({ drivers: mockPending, total: mockPending.length })),
   route("PATCH", `${A}/drivers/:id/approve`, "drivers", ({ params, user }) => {
     const i = mockPending.findIndex((p) => p.driverId === params.id);

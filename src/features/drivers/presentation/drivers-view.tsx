@@ -12,9 +12,10 @@ import { ResourceView } from "@/shared/ui/resource-view";
 import { driversUseCases } from "../application/drivers.use-cases";
 import { DRIVER_STATUS_LABELS, riskFlags, type Driver } from "../domain/driver";
 import type { DriverType } from "../domain/driver-ops";
+import { ConnectionTimePanel } from "./connection-time-panel";
 import { DriverSessionsPanel, EditDriverInfoButton, DriverTypeSelect, OnlineDriversPanel, PendingDriversPanel } from "./driver-ops-panels";
 
-const TABS = [["all", "Tous"], ["online", "En ligne"], ["pending", "Candidatures"]] as const;
+const TABS = [["all", "Tous"], ["online", "En ligne"], ["pending", "Candidatures"], ["time", "Temps de connexion"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export function DriversView() {
@@ -34,6 +35,7 @@ export function DriversView() {
       </PageHeader>
       {tab === "online" ? <OnlineDriversPanel /> : null}
       {tab === "pending" ? <PendingDriversPanel /> : null}
+      {tab === "time" ? <ConnectionTimePanel /> : null}
       <div className={tab === "all" ? "grid gap-3.5 xl:grid-cols-[minmax(0,1fr)_340px]" : "hidden"}>
         <Card className="overflow-hidden">
           <ResourceView state={drivers} onRetry={drivers.reload}>

@@ -189,3 +189,6 @@ declareReal("POST", "/v1/admin/contracts/drivers/:id/unblock");
 // Partenaires à valider
 declareReal("GET", "/v1/admin/partners/pending");
 declareReal("PATCH", "/v1/admin/partners/:id/validate");
+
+// Chauffeurs : temps de connexion par jour (rapport de flotte)
+declareReal("GET", "/v1/admin/drivers/connection-time");
