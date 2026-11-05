@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { toMember } from "../application/rbac.http-repository";
 import { accessChangeBlocker, deactivateBlocker, groupByModule, reactivateBlocker, registerBlocker, type NewMember } from "./rbac";
 
-const admin = toMember({ adminId: "a1", firstName: "Ada", lastName: "Z", email: null, phoneNumber: "+229 97 00 00 01", roleId: "r1", roleName: "Support", status: "ACTIVE", createdAt: "2026-11-01T00:00:00Z" });
+const raw = { adminId: "a1", firstName: "Ada", lastName: "Z", email: null, phoneNumber: "+229 97 00 00 01", roleId: "r1", roleName: "Support", status: "ACTIVE", createdAt: "2026-11-01T00:00:00Z" };
+const admin = toMember(raw);
 const draft: NewMember = { firstName: "Koffi", lastName: "Mensah", phone: "+229 97 00 00 02", password: "motdepasse", roleId: "r1" };
 
 describe("administrateurs (backend wami-co)", () => {
   it("convertit un administrateur", () => {
     expect(admin).toMatchObject({ id: "a1", name: "Ada Z", status: "active", roleId: "r1" });
-    expect(toMember({ ...admin, status: "DEACTIVATED" } as never).status).toBe("active");
+    expect(toMember({ ...raw, status: "DEACTIVATED" }).status).toBe("deactivated");
   });
   it("création : champs, mot de passe, doublon de téléphone", () => {
     expect(registerBlocker(draft, [admin])).toBeNull();
