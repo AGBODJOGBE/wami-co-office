@@ -7,6 +7,9 @@ import type { Member, PlatformSettings, Tariff } from "../seed-types";
 
 const A = "/v1/admin";
 
+const mockGrids: Array<{ id: string; version: string; isActive: boolean; activatedAt: string | null; baseFees: Record<string, number>; sensitivitySurcharges: { FRAGILE: number }; zonePricingMatrix: Array<{ originZoneCode: string; destinationZoneCode: string; fee: number }>; distanceRanges: Array<{ minKm: number; maxKm: number | null; fee: number }>; weightSurchargePerKg: number; urgencyMultipliers: { EXPRESS: number; SAME_DAY: number }; insuranceRate: number; insuranceMinimum: number; codFeeRate: number; codFeeMinimum: number }> = [
+  { id: "pg-1", version: "2026-10", isActive: true, activatedAt: new Date(Date.now() - 20 * 86_400_000).toISOString(), baseFees: { COURRIER: 1000, PETIT_COLIS: 1500, COLIS_MOYEN: 2500, COLIS_VOLUMINEUX: 4000, FRAGILE: 3000, HAUTE_VALEUR: 5000, PERISSABLE: 3500 }, sensitivitySurcharges: { FRAGILE: 500 }, zonePricingMatrix: [{ originZoneCode: "COTONOU", destinationZoneCode: "CALAVI", fee: 1500 }, { originZoneCode: "CALAVI", destinationZoneCode: "COTONOU", fee: 1500 }], distanceRanges: [{ minKm: 0, maxKm: 5, fee: 0 }, { minKm: 5, maxKm: null, fee: 200 }], weightSurchargePerKg: 100, urgencyMultipliers: { EXPRESS: 1.5, SAME_DAY: 1.25 }, insuranceRate: 0.02, insuranceMinimum: 500, codFeeRate: 0.03, codFeeMinimum: 300 },
+];
 /** Paramètres système et versions d'applications de démonstration (état en mémoire, comme le reste du faux backend). */
 const mockParams: Array<{ id: string; key: string; value: string; type: string; description: string; updatedBy: string; version: number; updatedAt: string; hasSpec: boolean; forcedOutOfBounds: boolean; module: string; label: string; unit: string; displayValue: string; min?: number; max?: number }> = [
   { id: "sc-1", key: "ride.matching.radius_km", value: "5", type: "NUMBER", description: "Rayon maximal de recherche d'un chauffeur.", updatedBy: "agent-superAdmin", version: 2, updatedAt: new Date().toISOString(), hasSpec: true, forcedOutOfBounds: false, module: "Courses", label: "Rayon de recherche", unit: "km", displayValue: "5 km", min: 1, max: 15 },
@@ -178,6 +181,23 @@ export const settingsRoutes: MockRoute[] = [
   route("GET", `${A}/rbac/audit-log`, "rbac", ({ query }) => {
     const category = query.get("category");
     return db().audit.filter((a) => !category || a.category === category);
+  }),
+
+  // Grille tarifaire des livraisons (contrat du backend WAMI : GET …/pricing-grid/active, POST …/pricing-grid).
+  route("GET", `${A}/pricing-grid/active`, "delivery-grid", () => {
+    if (!mockGrids.some((g) => g.isActive)) throw new MockError(404, "No active pricing grid found.", "not_found");
+    return mockGrids.find((g) => g.isActive);
+  }),
+  route("POST", `${A}/pricing-grid`, "delivery-grid", ({ body, user }) => {
+    const version = str(body, "version");
+    if (!version) throw invalid("version is required");
+    if (mockGrids.some((g) => g.version === version)) throw invalid(`Version "${version}" already exists. Choose a different version label.`);
+    if (!Array.isArray(body.zonePricingMatrix) || body.zonePricingMatrix.length === 0) throw invalid("At least one zone pricing entry is required");
+    for (const g of mockGrids) g.isActive = false;
+    const grid = { ...(body as object), id: newId("pg"), version, isActive: true, activatedAt: new Date().toISOString() } as (typeof mockGrids)[number];
+    mockGrids.push(grid);
+    audit(user, "Réglages", `Grille des livraisons ${version} publiée`);
+    return { id: grid.id, version, isActive: true, message: `Pricing grid ${version} is now active. Previous grid has been deactivated.` };
   }),
 
   // Paramètres système et versions des applications (contrat du backend WAMI : /api/app-config…, hors préfixe /admin).

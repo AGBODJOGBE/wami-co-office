@@ -199,3 +199,7 @@ declareReal("GET", "/v1/app-config/config/:key");
 declareReal("PUT", "/v1/app-config/config/:key");
 declareReal("GET", "/v1/app-config");
 declareReal("PUT", "/v1/app-config/:appType/:platform");
+
+// Grille tarifaire des livraisons
+declareReal("GET", "/v1/admin/pricing-grid/active");
+declareReal("POST", "/v1/admin/pricing-grid");

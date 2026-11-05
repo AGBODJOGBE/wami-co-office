@@ -38,6 +38,7 @@ export const MODULES = [
   "receivables",
   "wallet-config",
   "pricing-profiles",
+  "delivery-grid",
   "subscription-plans",
   "partners",
   "system-config",
@@ -84,6 +85,7 @@ const MATRIX: Record<Module, Row> = {
   receivables: { finance: "write", operations: "read" },
   "wallet-config": { finance: "read" },
   "pricing-profiles": { operations: "read", finance: "read" },
+  "delivery-grid": { operations: "read", finance: "read" },
   "subscription-plans": { operations: "read", finance: "write" },
   partners: { support: "write", operations: "read" },
   "system-config": { operations: "read" },
@@ -137,6 +139,7 @@ const PERMISSION_MAP: Partial<Record<Module, { read: string[]; write: string[] }
   affiliate: { read: ["affiliate.view", "affiliate.manage"], write: ["affiliate.manage"] },
   "driver-bonus": { read: ["driver.view_all"], write: ["driver.welcome_bonus.manage"] },
   "pricing-zones": { read: ["pricing.grid.configure"], write: ["pricing.grid.configure"] },
+  "delivery-grid": { read: ["pricing.grid.configure"], write: ["pricing.grid.configure"] },
   rbac: { read: ["admin.view_all"], write: ["admin.create", "admin.update_role"] },
 };
 
