@@ -6,6 +6,9 @@ import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
+const mockWalletConfig: Record<string, unknown> = { consolidationEnabled: true, consolidationFeeRate: 0.01, consolidationMinAmount: 1000, p2pTransferEnabled: true, p2pTransferFeeRate: 0.01, p2pMinimumAmount: 500, withdrawalMinMobileMoney: 1000, withdrawalMinBankTransfer: 10_000, grantMaxPerBeneficiary: 50_000, grantMaxTotal: 5_000_000, grantMaxBeneficiaries: 2000 };
+const mockWelcomeBonus = { bonusAmountFcfa: 5000, maxEligibleDrivers: 500, consumedCount: 212, isActive: true };
+
 const grantIds = (body: Record<string, unknown>): string[] => {
   const t = body.targeting as { beneficiaryIds?: unknown } | undefined;
   return Array.isArray(t?.beneficiaryIds) ? t.beneficiaryIds.filter((x): x is string => typeof x === "string") : [];
@@ -173,6 +176,59 @@ export const moneyRoutes: MockRoute[] = [
       return { campaignId: g.campaignId, status: g.status };
     }),
   ),
+
+  // Revenus, créances, dettes, règles des portefeuilles (contrat du backend WAMI).
+  route("GET", `${A}/platform/revenue`, "receivables", () => ({
+    walletId: "platform",
+    balance: 4_200_000,
+    period: { from: null, to: null },
+    breakdown: [
+      { source: "COMMISSION_REVENUE", label: "Courses", total: 1_450_000 },
+      { source: "B2C_COMMISSION_REVENUE", label: "Livraisons B2C", total: 620_000 },
+      { source: "CONTRACT_INSTALLMENT_REVENUE", label: "Contrats", total: 880_000 },
+    ],
+    totalRevenue: 2_950_000,
+    outflows: {
+      breakdown: [
+        { source: "AFFILIATE_COMMISSION_EXPENSE", label: "Commissions d’affiliation", category: "DEFINITIVE_EXPENSE", total: 120_000 },
+        { source: "BONUS_CREDIT", label: "Bonus et dotations", category: "DEFINITIVE_EXPENSE", total: 310_000 },
+        { source: "WITHDRAWAL", label: "Retraits des partenaires", category: "TREASURY_MOVEMENT", total: 1_900_000 },
+      ],
+      totalsByCategory: [],
+      total: 2_330_000,
+    },
+    netResult: 2_520_000,
+  })),
+  route("GET", `${A}/finance/receivables-overview`, "receivables", () => ({
+    drivers: [
+      { driverId: "drv-3", driverName: "Marius K.", contractReceivable: 120_000, commissionReceivable: 6_700, totalReceivable: 126_700, oldestReceivableAt: new Date(Date.now() - 40 * 86_400_000).toISOString() },
+      { driverId: "drv-5", driverName: "Bio C.", contractReceivable: 0, commissionReceivable: 14_300, totalReceivable: 14_300, oldestReceivableAt: new Date(Date.now() - 9 * 86_400_000).toISOString() },
+    ],
+    totals: { contractReceivable: 120_000, commissionReceivable: 21_000, totalReceivable: 141_000 },
+    page: 1, limit: 100, total: 2,
+  })),
+  route("GET", `${A}/drivers/commission-debts`, "receivables", () => ({
+    drivers: [{ driverId: "drv-3", walletId: "w-3", driverName: "Marius K.", driverPhone: "+229 01 97 00 00 03", driverStatus: "OFFLINE", debtAmount: 6_700, mainBalance: -6_700, bonusBalance: 0, referralBalance: 0, updatedAt: new Date().toISOString() }],
+    total: 1, totalDebtAmount: 6_700, page: 1, limit: 100,
+  })),
+  route("GET", `${A}/drivers/:id/commission-debts`, "receivables", ({ params }) => ({
+    driverId: params.id, walletId: "w-3", driverName: "Marius K.", driverPhone: "+229 01 97 00 00 03", debtAmount: 6_700, currentBalance: -6_700,
+    items: [{ transactionId: "tx-d1", source: "RIDE", entityId: "r1", entityNumber: "WMI-2RT9B", commissionAmount: 3_400, description: "Commission course en espèces", date: new Date(Date.now() - 2 * 86_400_000).toISOString() }, { transactionId: "tx-d2", source: "RIDE", entityId: "r2", entityNumber: "WMI-9KD21", commissionAmount: 3_300, description: "Commission course en espèces", date: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
+    total: 2, page: 1, limit: 50,
+  })),
+  route("GET", `${A}/wallet-config`, "wallet-config", () => mockWalletConfig),
+  route("PATCH", `${A}/wallet-config`, "wallet-config", ({ body, user }) => {
+    Object.assign(mockWalletConfig, body);
+    audit(user, "Réglages", "Règles des portefeuilles modifiées");
+    return mockWalletConfig;
+  }),
+  route("GET", `${A}/driver-welcome-bonus`, "wallet-config", () => ({ ...mockWelcomeBonus, remainingSlots: mockWelcomeBonus.maxEligibleDrivers - mockWelcomeBonus.consumedCount })),
+  route("PATCH", `${A}/driver-welcome-bonus`, "wallet-config", ({ body, user }) => {
+    for (const k of ["bonusAmountFcfa", "maxEligibleDrivers"] as const) if (typeof body[k] === "number") mockWelcomeBonus[k] = body[k];
+    if (typeof body.isActive === "boolean") mockWelcomeBonus.isActive = body.isActive;
+    audit(user, "Réglages", "Bonus de bienvenue modifié");
+    return { ...mockWelcomeBonus, remainingSlots: mockWelcomeBonus.maxEligibleDrivers - mockWelcomeBonus.consumedCount };
+  }),
 
   // Route absente du backend (faux backend) : ajustement manuel.
   route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {

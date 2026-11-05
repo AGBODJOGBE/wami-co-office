@@ -50,6 +50,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "wallet", href: "/wallet", label: "Portefeuilles" },
       { module: "withdrawals", href: "/withdrawals", label: "Retraits" },
       { module: "wallet-grants", href: "/wallet-grants", label: "Dotations" },
+      { module: "receivables", href: "/receivables", label: "Revenus et créances" },
       { module: "affiliate", href: "/affiliate", label: "Affiliation" },
       { module: "promo-codes", href: "/promo-codes", label: "Codes promo" },
     ],
@@ -58,6 +59,7 @@ export const NAVIGATION: NavGroup[] = [
     label: "Réglages",
     items: [
       { module: "pricing-zones", href: "/pricing-zones", label: "Tarifs et zones" },
+      { module: "wallet-config", href: "/wallet-config", label: "Règles des portefeuilles" },
       { module: "vtc", href: "/vtc", label: "Offres VTC" },
       { module: "parcel-types", href: "/parcel-types", label: "Types de colis" },
       { module: "rbac", href: "/rbac", label: "Rôles et journal" },

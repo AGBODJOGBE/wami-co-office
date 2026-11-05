@@ -94,3 +94,13 @@ declareReal("POST", "/v1/admin/wallet/grants/:id/approve");
 declareReal("POST", "/v1/admin/wallet/grants/:id/reject");
 declareReal("POST", "/v1/admin/wallet/grants/:id/cancel");
 declareReal("POST", "/v1/admin/wallet/grants/:id/retry-failed");
+
+// Revenus, créances, dettes de commission, règles des portefeuilles, bonus de bienvenue
+declareReal("GET", "/v1/admin/platform/revenue");
+declareReal("GET", "/v1/admin/finance/receivables-overview");
+declareReal("GET", "/v1/admin/drivers/commission-debts");
+declareReal("GET", "/v1/admin/drivers/:id/commission-debts");
+declareReal("GET", "/v1/admin/wallet-config");
+declareReal("PATCH", "/v1/admin/wallet-config");
+declareReal("GET", "/v1/admin/driver-welcome-bonus");
+declareReal("PATCH", "/v1/admin/driver-welcome-bonus");
