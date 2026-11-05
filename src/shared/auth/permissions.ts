@@ -21,6 +21,7 @@ export const MODULES = [
   "scheduled-rides",
   "delivery",
   "delivery-b2b",
+  "delivery-b2c",
   "rounds",
   "vtc",
   "parcel-types",
@@ -64,6 +65,7 @@ const MATRIX: Record<Module, Row> = {
   "scheduled-rides": { operations: "write", support: "read" },
   delivery: { operations: "write", support: "write", finance: "read" },
   "delivery-b2b": { operations: "read", support: "read", finance: "write" },
+  "delivery-b2c": { operations: "write", support: "write", finance: "read" },
   rounds: { operations: "write" },
   vtc: { operations: "read" },
   "parcel-types": { operations: "read" },
@@ -113,6 +115,7 @@ export function can(role: Role | undefined, module: Module, need: Exclude<Access
  */
 const PERMISSION_MAP: Partial<Record<Module, { read: string[]; write: string[] }>> = {
   rides: { read: ["ride.view_all"], write: ["ride.update_status"] },
+  "delivery-b2c": { read: ["delivery.order.view_all"], write: ["delivery.order.cancel"] },
   "scheduled-rides": { read: ["ride.scheduled.assign.view"], write: ["ride.scheduled.assign"] },
   drivers: { read: ["driver.view_all"], write: ["driver.suspend", "driver.reactivate", "driver.update_info"] },
   contracts: { read: ["contract.view_all"], write: ["contract.create", "contract.installment.manual_payment", "contract.suspend"] },

@@ -51,6 +51,10 @@ export const API = {
     deactivate: (id: string) => `${A}/subscription-plans/${id}/deactivate`,
     reactivate: (id: string) => `${A}/subscription-plans/${id}/reactivate`,
   },
+  deliveryB2c: {
+    list: `${A}/delivery`,
+    order: (id: string) => `${A}/delivery/${id}`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,

@@ -172,3 +172,7 @@ declareReal("POST", "/v1/admin/subscription-plans");
 declareReal("PATCH", "/v1/admin/subscription-plans/:id");
 declareReal("PATCH", "/v1/admin/subscription-plans/:id/deactivate");
 declareReal("PATCH", "/v1/admin/subscription-plans/:id/reactivate");
+
+// Livraisons B2C
+declareReal("GET", "/v1/admin/delivery");
+declareReal("DELETE", "/v1/admin/delivery/:id");

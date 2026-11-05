@@ -21,6 +21,7 @@ export const NAVIGATION: NavGroup[] = [
       { module: "rides", href: "/rides", label: "Courses" },
       { module: "scheduled-rides", href: "/scheduled-rides", label: "Courses programmées" },
       { module: "delivery", href: "/delivery", label: "Livraisons" },
+      { module: "delivery-b2c", href: "/delivery-b2c", label: "Livraisons B2C" },
       { module: "rounds", href: "/rounds", label: "Tournées" },
     ],
   },

@@ -6,6 +6,18 @@ import type { Overview, ParcelType, SearchHit } from "../seed-types";
 
 const A = "/v1/admin";
 
+const mkB2c = (n: number, status: string, over: Record<string, unknown> = {}) => ({
+  id: `b2c-${n}`, orderNumber: `DLV-${1000 + n}`, status, vehicleType: "MOTO", paymentMethod: "WALLET",
+  passenger: { passengerId: "p1", name: "[Client] Nadège A.", phone: "+229 01 97 11 00 01" },
+  driver: status === "PENDING_MATCH" ? null : { driverId: "drv-2", name: "[Livreur] Aïcha B.", phone: "+229 01 97 00 00 02" },
+  pickup: { address: "Cadjèhoun" }, dropoff: { address: "Fidjrossè" },
+  parcel: { type: "SMALL_PARCEL", description: "Colis" }, recipient: { name: "Jean", phone: "+22997000000" },
+  pricing: { estimatedPrice: 2000, finalPrice: status === "COMPLETED" ? 2000 : null, platformCommission: status === "COMPLETED" ? 300 : null, driverPayout: status === "COMPLETED" ? 1700 : null },
+  pickupPhoto: null, deliveryPhoto: null, cancelReason: null as string | null, cancelledBy: null as string | null, scheduledAt: null, createdAt: new Date().toISOString(), ...over,
+});
+/** Livraisons B2C de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockB2c = [mkB2c(1, "IN_TRANSIT"), mkB2c(2, "PENDING_MATCH"), mkB2c(3, "DELIVERY_FAILED"), mkB2c(4, "COMPLETED")];
+
 /** Courses programmées de démonstration (état en mémoire, comme le reste du faux backend). */
 const mockScheduled = [
   { rideId: "sr-1", rideNumber: "WMI-PRG-101", passengerId: "p1", scheduledAt: new Date(Date.now() + 25 * 60_000).toISOString(), minutesUntilDeparture: 25, vehicleType: "ECO", pickup: { latitude: 6.37, longitude: 2.39, address: "Cadjèhoun" }, dropoff: { latitude: 6.35, longitude: 2.42, address: "Aéroport de Cotonou" }, estimatedPrice: 3500, guaranteeAmount: 1050 },
@@ -176,6 +188,18 @@ export const operationsRoutes: MockRoute[] = [
     ];
     const users = all.filter((u) => (!role || u.role === role) && (active === null || String(u.isActive) === active) && matches(q, u.firstName, u.lastName, u.phoneNumber));
     return { users, total: users.length };
+  }),
+
+  // Livraisons B2C (contrat du backend WAMI : GET /api/admin/delivery, DELETE /api/admin/delivery/:id).
+  route("GET", `${A}/delivery`, "delivery-b2c", () => mockB2c),
+  route("DELETE", `${A}/delivery/:id`, "delivery-b2c", ({ params, body, user }) => {
+    const d = find(mockB2c, (x) => x.id === params.id);
+    if (["COMPLETED", "CANCELLED", "RETURNED"].includes(d.status)) throw invalid("Order cannot be cancelled in its current status");
+    d.status = "CANCELLED";
+    d.cancelReason = str(body, "reason") || "Cancelled by admin";
+    d.cancelledBy = "ADMIN";
+    audit(user, "Opérations", `A annulé la livraison B2C ${d.orderNumber} · ${d.cancelReason}`);
+    return {};
   }),
 
   // ── Livraisons ──
