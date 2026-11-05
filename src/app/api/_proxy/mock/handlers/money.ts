@@ -1,6 +1,6 @@
 import "server-only";
 import { audit, db, newId } from "../db";
-import { find, matches, num, replace, requireText, str } from "../helpers";
+import { find, num, replace, requireText, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
 import type { Campaign, PromoCode, ReferralProgram } from "../seed-types";
 
@@ -39,22 +39,44 @@ export const moneyRoutes: MockRoute[] = [
   }),
 
   // ── Portefeuilles ──
-  route("GET", `${A}/wallets`, "wallet", ({ query }) => {
-    const q = query.get("q") ?? "";
-    return db().wallets.filter((w) => matches(q, w.ownerName, w.phone));
+  // Même contrat que le backend WAMI : wallets, transactions, blocage des retraits.
+  route("GET", `${A}/wallets`, "wallet", () => {
+    const wallets = db().wallets.map((w) => ({
+      walletId: w.id,
+      walletType: w.ownerType === "client" ? "PAYMENT" : w.ownerType === "platform" ? "PLATFORM" : "EARNINGS",
+      totalBalance: w.balance,
+      status: w.status === "active" ? "ACTIVE" : "SUSPENDED",
+      withdrawalsBlocked: w.withdrawalsBlocked,
+      withdrawalsBlockedReason: w.withdrawalsBlockedReason,
+      ownerName: w.ownerName,
+      ownerPhone: w.phone,
+    }));
+    return { wallets, total: wallets.length };
   }),
-  route("POST", `${A}/wallets/:id/adjustments`, "wallet", ({ params, body, user }) => {
+  route("GET", `${A}/transactions`, "wallet", ({ query }) => {
+    const w = db().wallets.find((x) => x.id === query.get("walletId"));
+    const transactions = (w ? w.movements : db().wallets.flatMap((x) => x.movements)).map((m) => ({
+      transactionId: m.id,
+      direction: m.amount < 0 ? "DEBIT" : "CREDIT",
+      amount: Math.abs(m.amount),
+      description: m.label,
+      createdAt: m.at,
+    }));
+    return { transactions, total: transactions.length, page: 1, limit: 20 };
+  }),
+  route("PATCH", `${A}/wallets/:id/withdrawals/block`, "wallet", ({ params, body, user }) => {
     const w = find(db().wallets, (x) => x.id === params.id);
-    const amount = num(body, "amount");
     const reason = str(body, "reason");
-    requireText(reason, 10, "Motif obligatoire.");
-    if (!Number.isInteger(amount) || amount === 0) throw invalid("Montant invalide.");
-    audit(user, "Argent", `Ajustement de ${amount} F sur le portefeuille de ${w.ownerName} · ${reason}`);
-    return replace(db().wallets, (x) => x.id === w.id, {
-      ...w,
-      balance: w.balance + amount,
-      movements: [{ id: newId("wm"), at: new Date().toISOString(), label: `Ajustement : ${reason}`, amount }, ...w.movements],
-    });
+    requireText(reason, 1, "reason is required");
+    audit(user, "Argent", `A bloqué les retraits de ${w.ownerName} · ${reason}`);
+    replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: true, withdrawalsBlockedReason: reason });
+    return { walletId: w.id, withdrawalsBlocked: true, withdrawalsBlockedReason: reason, withdrawalsBlockedAt: new Date().toISOString(), withdrawalsBlockedBy: user.id };
+  }),
+  route("PATCH", `${A}/wallets/:id/withdrawals/unblock`, "wallet", ({ params, user }) => {
+    const w = find(db().wallets, (x) => x.id === params.id);
+    audit(user, "Argent", `A débloqué les retraits de ${w.ownerName}`);
+    replace(db().wallets, (x) => x.id === w.id, { ...w, withdrawalsBlocked: false, withdrawalsBlockedReason: null });
+    return { walletId: w.id, withdrawalsBlocked: false, withdrawalsBlockedReason: null, withdrawalsBlockedAt: null, withdrawalsBlockedBy: null };
   }),
 
   // ── Finances ──

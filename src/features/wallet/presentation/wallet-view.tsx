@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "@/shared/auth/session.store";
 import { useAction } from "@/shared/hooks/use-action";
 import { useResource } from "@/shared/hooks/use-resource";
 import { dateTime, fcfa } from "@/shared/lib/format";
 import { useCanWrite } from "@/shared/ui/app-shell";
 import { DataTable } from "@/shared/ui/data-table";
-import { Button, Card, CardHeader, Field, fieldClass, PageHeader, Tag } from "@/shared/ui/primitives";
+import { Button, Card, CardHeader, Field, fieldClass, Note, PageHeader, Tag } from "@/shared/ui/primitives";
 import { ResourceView } from "@/shared/ui/resource-view";
 import { walletUseCases } from "../application/wallet.use-cases";
 import type { Wallet, WalletMovement } from "../domain/wallet";
 
-const OWNER: Record<Wallet["ownerType"], string> = { client: "Client", partner: "Partenaire", establishment: "Établissement" };
+const OWNER: Record<Wallet["ownerType"], string> = { client: "Passager", partner: "Partenaire", establishment: "Établissement", platform: "Plateforme" };
 
 export function WalletView() {
   const [q, setQ] = useState("");
@@ -43,7 +42,12 @@ export function WalletView() {
                     { key: "type", header: "Type", render: (w) => OWNER[w.ownerType] },
                     { key: "phone", header: "Téléphone", render: (w) => w.phone },
                     { key: "balance", header: "Solde", align: "right", render: (w) => <span className={w.balance < 0 ? "font-bold text-bad" : undefined}>{fcfa(w.balance)}</span> },
-                    { key: "status", header: "", render: (w) => (w.status === "frozen" ? <Tag tone="bad">Gelé</Tag> : null) },
+                    { key: "status", header: "", render: (w) => (
+                      <span className="flex gap-1">
+                        {w.status === "frozen" ? <Tag tone="bad">Gelé</Tag> : null}
+                        {w.withdrawalsBlocked ? <Tag tone="warn">Retraits bloqués</Tag> : null}
+                      </span>
+                    ) },
                   ]}
                 />
               </Card>
@@ -61,11 +65,10 @@ export function WalletView() {
 }
 
 function WalletPanel({ wallet, onChange }: { wallet: Wallet; onChange: (w: Wallet) => void }) {
-  const isSuperAdmin = useSession((s) => s.user?.role === "superAdmin");
   const canWrite = useCanWrite("wallet");
   const { busy, run } = useAction();
-  const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const movements = useResource(() => walletUseCases.movements(wallet.id), wallet.id);
 
   return (
     <Card className="flex flex-col gap-2 px-4 py-3.5">
@@ -74,37 +77,56 @@ function WalletPanel({ wallet, onChange }: { wallet: Wallet; onChange: (w: Walle
         <span className="tabular font-display text-lg font-bold">{fcfa(wallet.balance)}</span>
       </div>
       <CardHeader title="Derniers mouvements" />
-      <DataTable<WalletMovement>
-        rows={wallet.movements}
-        rowKey={(m) => m.id}
-        columns={[
-          { key: "at", header: "Date", render: (m) => dateTime(m.at) },
-          { key: "label", header: "Libellé", render: (m) => m.label },
-          { key: "amount", header: "Montant", align: "right", render: (m) => <span className={m.amount < 0 ? "text-bad" : "text-ok"}>{fcfa(m.amount, { signed: true })}</span> },
-        ]}
-      />
-      <b className="mt-2 text-sm">Ajustement manuel</b>
-      <Field label="Montant (F)" hint="Positif pour créditer, négatif pour débiter.">
-        <input className={fieldClass} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d-]/g, ""))} />
-      </Field>
-      <Field label="Motif">
-        <input className={fieldClass} value={reason} onChange={(e) => setReason(e.target.value)} />
-      </Field>
-      <Button
-        tone="primary"
-        disabled={!canWrite}
-        busy={busy}
-        onClick={async () => {
-          const r = await run(() => walletUseCases.adjust(wallet, Number(amount), reason, isSuperAdmin), "Ajustement enregistré et tracé dans le journal.");
-          if (r) {
-            onChange(r);
-            setAmount("");
-            setReason("");
-          }
-        }}
-      >
-        Enregistrer l’ajustement
-      </Button>
+      <ResourceView state={movements} onRetry={movements.reload}>
+        {(rows) => (
+          <DataTable<WalletMovement>
+            rows={rows}
+            rowKey={(m) => m.id}
+            columns={[
+              { key: "at", header: "Date", render: (m) => dateTime(m.at) },
+              { key: "label", header: "Libellé", render: (m) => m.label },
+              { key: "amount", header: "Montant", align: "right", render: (m) => <span className={m.amount < 0 ? "text-bad" : "text-ok"}>{fcfa(m.amount, { signed: true })}</span> },
+            ]}
+          />
+        )}
+      </ResourceView>
+      <b className="mt-2 text-sm">Retraits</b>
+      {wallet.withdrawalsBlocked ? (
+        <>
+          <Note>Retraits bloqués{wallet.withdrawalsBlockedReason ? ` : ${wallet.withdrawalsBlockedReason}` : "."}</Note>
+          <Button
+            tone="primary"
+            disabled={!canWrite}
+            busy={busy}
+            onClick={async () => {
+              const r = await run(() => walletUseCases.unblockWithdrawals(wallet), "Retraits débloqués.");
+              if (r !== undefined) onChange({ ...wallet, withdrawalsBlocked: false, withdrawalsBlockedReason: null });
+            }}
+          >
+            Débloquer les retraits
+          </Button>
+        </>
+      ) : (
+        <>
+          <Field label="Motif du blocage">
+            <input className={fieldClass} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+          <Button
+            tone="danger"
+            disabled={!canWrite}
+            busy={busy}
+            onClick={async () => {
+              const r = await run(() => walletUseCases.blockWithdrawals(wallet, reason), "Retraits bloqués et tracés.");
+              if (r !== undefined) {
+                onChange({ ...wallet, withdrawalsBlocked: true, withdrawalsBlockedReason: reason.trim() });
+                setReason("");
+              }
+            }}
+          >
+            Bloquer les retraits
+          </Button>
+        </>
+      )}
     </Card>
   );
 }

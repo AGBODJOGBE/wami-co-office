@@ -14,3 +14,10 @@ declareReal("PATCH", "/v1/admin/drivers/:id/reactivate");
 declareReal("GET", "/v1/admin/rides");
 declareReal("GET", "/v1/admin/rides/:id");
 declareReal("PATCH", "/v1/admin/rides/:id/status");
+
+// Portefeuilles
+declareReal("GET", "/v1/admin/wallets");
+declareReal("GET", "/v1/admin/wallets/:id");
+declareReal("PATCH", "/v1/admin/wallets/:id/withdrawals/block");
+declareReal("PATCH", "/v1/admin/wallets/:id/withdrawals/unblock");
+declareReal("GET", "/v1/admin/transactions");
