@@ -18,6 +18,7 @@ export const MODULES = [
   "search",
   "live-ops",
   "rides",
+  "scheduled-rides",
   "delivery",
   "delivery-b2b",
   "rounds",
@@ -56,6 +57,7 @@ const MATRIX: Record<Module, Row> = {
   search: { operations: "read", support: "read", finance: "read" },
   "live-ops": { operations: "write", support: "read" },
   rides: { operations: "write", support: "write", finance: "read" },
+  "scheduled-rides": { operations: "write", support: "read" },
   delivery: { operations: "write", support: "write", finance: "read" },
   "delivery-b2b": { operations: "read", support: "read", finance: "write" },
   rounds: { operations: "write" },
@@ -103,6 +105,7 @@ export function can(role: Role | undefined, module: Module, need: Exclude<Access
  */
 const PERMISSION_MAP: Partial<Record<Module, { read: string[]; write: string[] }>> = {
   rides: { read: ["ride.view_all"], write: ["ride.update_status"] },
+  "scheduled-rides": { read: ["ride.scheduled.assign.view"], write: ["ride.scheduled.assign"] },
   drivers: { read: ["driver.view_all"], write: ["driver.suspend", "driver.reactivate", "driver.update_info"] },
   contracts: { read: ["contract.view_all"], write: ["contract.create", "contract.installment.manual_payment", "contract.suspend"] },
   wallet: { read: ["wallet.view_all"], write: ["wallet.block_withdrawals", "wallet.withdrawal.approve", "wallet.grant.request"] },

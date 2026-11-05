@@ -25,6 +25,10 @@ export const API = {
     incidents: `${A}/incidents`,
     resolveIncident: (id: string) => `${A}/incidents/${id}/resolve`,
   },
+  scheduledRides: {
+    list: `${A}/scheduled-rides/manual-assignment`,
+    assign: (rideId: string) => `${A}/scheduled-rides/${rideId}/manual-assignment`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,

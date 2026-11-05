@@ -1,10 +1,16 @@
 import "server-only";
 import { audit, db } from "../db";
 import { find, matches, replace, requireText, str } from "../helpers";
-import { invalid, route, type MockRoute } from "../router";
+import { invalid, notFound, route, type MockRoute } from "../router";
 import type { Overview, ParcelType, SearchHit } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Courses programmées de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockScheduled = [
+  { rideId: "sr-1", rideNumber: "WMI-PRG-101", passengerId: "p1", scheduledAt: new Date(Date.now() + 25 * 60_000).toISOString(), minutesUntilDeparture: 25, vehicleType: "ECO", pickup: { latitude: 6.37, longitude: 2.39, address: "Cadjèhoun" }, dropoff: { latitude: 6.35, longitude: 2.42, address: "Aéroport de Cotonou" }, estimatedPrice: 3500, guaranteeAmount: 1050 },
+  { rideId: "sr-2", rideNumber: "WMI-PRG-102", passengerId: "p2", scheduledAt: new Date(Date.now() + 40 * 60_000).toISOString(), minutesUntilDeparture: 40, vehicleType: "MOTO", pickup: { latitude: 6.4, longitude: 2.35, address: "Akpakpa" }, dropoff: { latitude: 6.37, longitude: 2.4, address: "Fidjrossè" }, estimatedPrice: 1800, guaranteeAmount: null },
+];
 
 /** Tableau de bord, opérations en direct, courses, livraisons, tournées, B2B, offres, colis, recherche. */
 export const operationsRoutes: MockRoute[] = [
@@ -114,6 +120,29 @@ export const operationsRoutes: MockRoute[] = [
     audit(user, "Opérations", `A annulé la course ${r.id} · ${reason}`);
     replace(db().rides, (x) => x.id === r.id, { ...r, status: "cancelled", cancelReason: reason, cancelledBy: "admin" });
     return { rideId: r.id, rideNumber: r.id, oldStatus: "IN_PROGRESS", newStatus: "CANCELLED_SYSTEM", reason };
+  }),
+
+  // Courses programmées à affecter (contrat du backend WAMI : /api/admin/scheduled-rides/…).
+  route("GET", `${A}/scheduled-rides/manual-assignment`, "scheduled-rides", () => ({
+    thresholdMinutes: 45,
+    total: mockScheduled.length,
+    rides: mockScheduled.map((r) => ({
+      ...r,
+      candidates: db().drivers.filter((d) => d.status === "active").slice(0, 3).map((d, i) => {
+        const [firstName = "", ...rest] = d.name.split(" ");
+        return { driverId: d.id, firstName, lastName: rest.join(" "), phoneNumber: d.phone, rating: d.rating, totalRides: d.missionsTotal, vehicle: { vehicleId: `v-${d.id}`, vehicleType: "MOTO", ownership: "DRIVER", make: d.vehicle, model: "", color: "", licensePlate: "" }, isOnline: d.online, lastKnownLocation: null, distanceMeters: i === 2 ? null : 800 + i * 1500 };
+      }),
+    })),
+  })),
+  route("POST", `${A}/scheduled-rides/:id/manual-assignment`, "scheduled-rides", ({ params, body, user }) => {
+    const i = mockScheduled.findIndex((r) => r.rideId === params.id);
+    if (i < 0) throw notFound("Course introuvable.");
+    const driverId = str(body, "driverId");
+    if (!driverId) throw invalid("driverId est requis.");
+    const d = find(db().drivers, (x) => x.id === driverId, "Chauffeur introuvable.");
+    const [r] = mockScheduled.splice(i, 1);
+    audit(user, "Opérations", `A affecté ${d.name} à la course programmée ${r!.rideNumber}`);
+    return { rideId: r!.rideId, driverId: d.id, status: "SCHEDULED_CONFIRMED" };
   }),
 
   // ── Livraisons ──

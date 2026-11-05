@@ -19,6 +19,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { module: "live-ops", href: "/live-ops", label: "En direct et incidents" },
       { module: "rides", href: "/rides", label: "Courses" },
+      { module: "scheduled-rides", href: "/scheduled-rides", label: "Courses programmées" },
       { module: "delivery", href: "/delivery", label: "Livraisons" },
       { module: "rounds", href: "/rounds", label: "Tournées" },
     ],

@@ -104,3 +104,7 @@ declareReal("GET", "/v1/admin/wallet-config");
 declareReal("PATCH", "/v1/admin/wallet-config");
 declareReal("GET", "/v1/admin/driver-welcome-bonus");
 declareReal("PATCH", "/v1/admin/driver-welcome-bonus");
+
+// Courses programmées : affectation manuelle
+declareReal("GET", "/v1/admin/scheduled-rides/manual-assignment");
+declareReal("POST", "/v1/admin/scheduled-rides/:id/manual-assignment");
