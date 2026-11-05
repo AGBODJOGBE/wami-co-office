@@ -1,7 +1,11 @@
-import type { Challenge, ChallengeDraft } from "./challenge";
+import type { BonusConfig, BonusEntry, BonusFamily, BonusLedger, BonusRunConfig } from "./bonus";
 
 export interface DriverBonusRepository {
-  list(): Promise<Challenge[]>;
-  create(draft: ChallengeDraft): Promise<Challenge>;
-  archive(id: string): Promise<Challenge>;
+  configs(family: BonusFamily): Promise<BonusConfig[]>;
+  activate(c: BonusConfig): Promise<void>;
+  deactivate(c: BonusConfig): Promise<void>;
+  remove(c: BonusConfig): Promise<void>;
+  entries(ledger: BonusLedger): Promise<BonusEntry[]>;
+  runConfig(): Promise<BonusRunConfig>;
+  saveRunConfig(cfg: BonusRunConfig): Promise<void>;
 }

@@ -4,7 +4,6 @@ import type {
   AuditEntry,
   B2bAccount,
   Campaign,
-  Challenge,
   Commission,
   Contract,
   Courier,
@@ -49,7 +48,6 @@ export interface MockDb {
   drivers: Driver[];
   vehicles: Vehicle[];
   contracts: Contract[];
-  challenges: Challenge[];
   establishments: Establishment[];
   tickets: Ticket[];
   wallets: Wallet[];
@@ -382,11 +380,6 @@ export function seed(): MockDb {
       { id: "LV-002", driverName: "[Livreur] Aïcha B.", vehicleLabel: "Haojue", plate: "CD 5678 RB", startDate: daysAgo(56), totalPrice: 600_000, deposit: 60_000, weeklyInstallment: 15_000, weeks: 40, status: "active", payments: Array.from({ length: 6 }, (_, i) => ({ id: `p2-${i}`, date: daysAgo(56 - 7 * i), amount: 15_000, method: "momo" as const })) },
       { id: "LV-003", driverName: "[Chauffeur] Bio C.", vehicleLabel: "TVS King", plate: "EF 9012 RB", startDate: daysAgo(84), totalPrice: 1_200_000, deposit: 100_000, weeklyInstallment: 25_000, weeks: 48, status: "active", payments: Array.from({ length: 7 }, (_, i) => ({ id: `p3-${i}`, date: daysAgo(84 - 7 * i), amount: 25_000, method: "cash" as const })) },
       { id: "LV-004", driverName: "[Chauffeur] Rodrigue H.", vehicleLabel: "Bajaj Boxer", plate: "MN 2020 RB", startDate: daysAgo(300), totalPrice: 600_000, deposit: 50_000, weeklyInstallment: 15_000, weeks: 40, status: "completed", payments: [{ id: "p4", date: daysAgo(10), amount: 600_000, method: "momo" }] },
-    ],
-    challenges: [
-      { id: "ch-1", title: "Rush de fin de mois", zone: "Cotonou centre", service: "ride", targetMissions: 60, reward: 10_000, startsAt: daysAgo(4), endsAt: daysFromNow(3), participants: 182, achievers: 37, archived: false },
-      { id: "ch-2", title: "Livreurs du week-end", zone: "Cotonou centre", service: "delivery", targetMissions: 25, reward: 5_000, startsAt: daysFromNow(2), endsAt: daysFromNow(4), participants: 0, achievers: 0, archived: false },
-      { id: "ch-3", title: "Lancement Abomey-Calavi", zone: "Abomey-Calavi", service: "all", targetMissions: 40, reward: 8_000, startsAt: daysAgo(30), endsAt: daysAgo(16), participants: 64, achievers: 21, archived: false },
     ],
     establishments: [
       { id: "e-1", name: "Le Palmier", activity: "restaurant", district: "Cadjèhoun", status: "open", ownerName: "[Gérant]", ownerPhone: "+229 01 •• •• 42", since: "mars 2026", commissionRate: null, defaultCommissionRate: 0.12, rating: 4.6, sales30d: 1_845_000, rejectionRate: 0.03, payout: "Hebdomadaire · MTN MoMo" },

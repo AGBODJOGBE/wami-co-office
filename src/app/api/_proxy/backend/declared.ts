@@ -56,3 +56,17 @@ declareReal("GET", "/v1/admin/referrals/config");
 declareReal("POST", "/v1/admin/referrals/config/:id/activate");
 declareReal("POST", "/v1/admin/referrals/config/:id/deactivate");
 declareReal("DELETE", "/v1/admin/referrals/config/:id");
+
+// Primes chauffeurs
+for (const kind of ["config", "activity-config", "quality-config"]) {
+  declareReal("GET", `/v1/admin/driver-bonus/${kind}`);
+  declareReal("POST", `/v1/admin/driver-bonus/${kind}/:id/activate`);
+  declareReal("POST", `/v1/admin/driver-bonus/${kind}/:id/deactivate`);
+  declareReal("DELETE", `/v1/admin/driver-bonus/${kind}/:id`);
+}
+declareReal("GET", "/v1/admin/driver-bonus/awards");
+declareReal("GET", "/v1/admin/driver-bonus/activity-ledger");
+declareReal("GET", "/v1/admin/driver-bonus/activity-payouts");
+declareReal("GET", "/v1/admin/driver-bonus/quality-ledger");
+declareReal("GET", "/v1/admin/driver-bonus/run-config");
+declareReal("PUT", "/v1/admin/driver-bonus/run-config");

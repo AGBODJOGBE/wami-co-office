@@ -40,7 +40,6 @@ export interface Contract {
   payments: Array<{ id: string; date: string; amount: number; method: "cash" | "momo" | "earnings" }>;
   status: "active" | "suspended" | "completed" | "terminated";
 }
-export type { Challenge } from "@/features/driver-bonus";
 export type { Establishment } from "@/features/establishments";
 export type { Ticket } from "@/features/support";
 export type { Wallet } from "@/features/wallet";

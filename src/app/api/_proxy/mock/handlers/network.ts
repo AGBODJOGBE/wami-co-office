@@ -2,9 +2,26 @@ import "server-only";
 import { audit, db, newId } from "../db";
 import { find, num, replace, requireText, str } from "../helpers";
 import { invalid, route, type MockRoute } from "../router";
-import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
+
+/** Configurations de primes de démonstration (état en mémoire, comme le reste du faux backend). */
+interface MockBonus {
+  id: string;
+  name: string;
+  description: null;
+  vehicleCategory: string;
+  isActive: boolean;
+  tiers: Array<Record<string, unknown>>;
+  minRidesPerMonth?: number;
+}
+const mkConfig = (id: string, name: string, tiers: Array<Record<string, unknown>>, isActive: boolean): MockBonus => ({ id, name, description: null, vehicleCategory: "MOTO", isActive, tiers });
+const bonusConfigs: Record<"config" | "activity-config" | "quality-config", MockBonus[]> = {
+  config: [mkConfig("bt-1", "Paliers moto", [{ ridesThreshold: 50, bonusAmount: 5000 }, { ridesThreshold: 150, bonusAmount: 15000 }], true), mkConfig("bt-2", "Paliers moto (test)", [{ ridesThreshold: 30, bonusAmount: 2000 }], false)],
+  "activity-config": [mkConfig("ba-1", "Activité moto", [{ name: "Bronze", ridesThresholdPerDay: 10, bonusPct: 2 }, { name: "Argent", ridesThresholdPerDay: 15, bonusPct: 3 }], true)],
+  "quality-config": [{ ...mkConfig("bq-1", "Qualité moto", [{ minRating: 4.5, bonusAmount: 5000 }, { minRating: 4.8, bonusAmount: 8000 }], true), minRidesPerMonth: 100 }],
+};
+const bonusRun = { welcomeBonusEnabled: true, activityBonusEnabled: true, qualityBonusEnabled: true, activityPayoutFrequency: "WEEKLY" };
 
 /** Vérifications, chauffeurs, véhicules, location-vente, primes, établissements. */
 export const networkRoutes: MockRoute[] = [
@@ -150,24 +167,37 @@ export const networkRoutes: MockRoute[] = [
     }),
   ),
 
-  // ── Primes ──
-  route("GET", `${A}/driver-bonus/challenges`, "driver-bonus", () => db().challenges),
-  route("POST", `${A}/driver-bonus/challenges`, "driver-bonus", ({ body, user }) => {
-    const c: Challenge = {
-      ...(body as unknown as Omit<Challenge, "id" | "participants" | "achievers" | "archived">),
-      id: newId("ch"),
-      participants: 0,
-      achievers: 0,
-      archived: false,
-    };
-    db().challenges.unshift(c);
-    audit(user, "Argent", `A créé le challenge « ${c.title} » (${c.targetMissions} missions → ${c.reward} F)`);
-    return c;
+  // ── Primes chauffeurs ── (contrat du backend WAMI : /api/admin/driver-bonus/…)
+  ...(["config", "activity-config", "quality-config"] as const).flatMap((kind) => {
+    const list = bonusConfigs[kind];
+    return [
+      route("GET", `${A}/driver-bonus/${kind}`, "driver-bonus", () => list),
+      ...(["activate", "deactivate"] as const).map((action) =>
+        route("POST", `${A}/driver-bonus/${kind}/:id/${action}`, "driver-bonus", ({ params, user }) => {
+          const c = find(list, (x) => x.id === params.id);
+          audit(user, "Argent", `Prime « ${c.name} » : ${action}`);
+          for (const x of list) x.isActive = action === "activate" ? x.id === c.id : x.isActive && x.id !== c.id;
+          return { id: c.id, isActive: c.isActive };
+        }),
+      ),
+      route("DELETE", `${A}/driver-bonus/${kind}/:id`, "driver-bonus", ({ params, user }) => {
+        const c = find(list, (x) => x.id === params.id);
+        if (c.isActive) throw invalid("Cannot delete an active configuration");
+        list.splice(list.indexOf(c), 1);
+        audit(user, "Argent", `Prime « ${c.name} » supprimée`);
+        return { id: c.id };
+      }),
+    ];
   }),
-  route("PATCH", `${A}/driver-bonus/challenges/:id`, "driver-bonus", ({ params, user }) => {
-    const c = find(db().challenges, (x) => x.id === params.id);
-    audit(user, "Réglages", `A archivé le challenge « ${c.title} »`);
-    return replace(db().challenges, (x) => x.id === c.id, { ...c, archived: true });
+  route("GET", `${A}/driver-bonus/awards`, "driver-bonus", () => [{ id: "aw-1", driverId: "drv-1", vehicleCategory: "MOTO", ridesThreshold: 50, bonusAmount: 5000, configId: "bt-1", transactionId: "tx-1", awardedAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/activity-ledger`, "driver-bonus", () => [{ id: "al-1", driverId: "drv-2", vehicleCategory: "MOTO", activityDate: "2026-11-04", ridesCount: 14, netAmount: 21000, tierPctApplied: 3, bonusAmount: 630, configId: "ba-1", paid: false, paidAt: null, transactionId: null, createdAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/activity-payouts`, "driver-bonus", () => [{ id: "ap-1", driverId: "drv-2", payoutRunDate: "2026-11-03", coveredLedgerIds: ["al-0"], totalAmount: 3200, transactionId: "tx-2", createdAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/quality-ledger`, "driver-bonus", () => [{ id: "ql-1", driverId: "drv-1", vehicleCategory: "MOTO", yearMonth: "2026-10", ridesCount: 210, averageRating: 4.8, bonusAmount: 8000, configId: "bq-1", transactionId: "tx-3", awardedAt: new Date().toISOString() }]),
+  route("GET", `${A}/driver-bonus/run-config`, "driver-bonus", () => bonusRun),
+  route("PUT", `${A}/driver-bonus/run-config`, "driver-bonus", ({ body, user }) => {
+    for (const k of ["welcomeBonusEnabled", "activityBonusEnabled", "qualityBonusEnabled"] as const) if (typeof body[k] === "boolean") bonusRun[k] = body[k];
+    audit(user, "Argent", "Calendrier des primes modifié");
+    return bonusRun;
   }),
 
   // ── Établissements ──

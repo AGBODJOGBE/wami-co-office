@@ -87,8 +87,15 @@ export const API = {
     activate: (dossierId: string) => `${A}/verifications/${dossierId}/activate`,
   },
   driverBonus: {
-    challenges: `${A}/driver-bonus/challenges`,
-    challenge: (id: string) => `${A}/driver-bonus/challenges/${id}`,
+    tierConfigs: `${A}/driver-bonus/config`,
+    activityConfigs: `${A}/driver-bonus/activity-config`,
+    qualityConfigs: `${A}/driver-bonus/quality-config`,
+    awards: `${A}/driver-bonus/awards`,
+    activityLedger: `${A}/driver-bonus/activity-ledger`,
+    activityPayouts: `${A}/driver-bonus/activity-payouts`,
+    qualityLedger: `${A}/driver-bonus/quality-ledger`,
+    runConfig: `${A}/driver-bonus/run-config`,
+    welcomeBonus: `${A}/driver-welcome-bonus`,
   },
   establishments: {
     list: `${A}/establishments`,
