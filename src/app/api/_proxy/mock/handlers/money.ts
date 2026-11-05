@@ -2,7 +2,7 @@ import "server-only";
 import { audit, db, newId } from "../db";
 import { find, num, replace, requireText, str } from "../helpers";
 import { MockError, invalid, route, type MockRoute } from "../router";
-import type { Campaign, PromoCode, ReferralProgram } from "../seed-types";
+import type { Campaign, ReferralProgram } from "../seed-types";
 
 const A = "/v1/admin";
 
@@ -100,20 +100,53 @@ export const moneyRoutes: MockRoute[] = [
     return db().batch;
   }),
 
-  // ── Codes promo ──
-  route("GET", `${A}/promo-codes`, "promo-codes", () => db().promos),
+  // ── Codes promo ── (contrat du backend WAMI : /api/admin/promo-codes, PATCH …/:id/toggle)
+  route("GET", `${A}/promo-codes`, "promo-codes", () =>
+    db().promos.map((p) => ({
+      id: p.id,
+      code: p.code,
+      campaignName: p.description,
+      displayText: p.description,
+      discountType: p.kind === "percent" ? "PERCENTAGE" : "FIXED_AMOUNT",
+      discountValue: p.value,
+      maxDiscountAmount: p.cap,
+      startDate: p.startsAt,
+      endDate: p.endsAt,
+      maxTotalUsages: p.maxUses,
+      currentUsages: p.used,
+      vertical: p.services.every((s) => s === "delivery" || s === "meal") ? "DELIVERY_B2C" : "TRANSPORT",
+      fundedBy: p.fundedBy === "wami" ? "WAMI" : "PARTNER",
+      usageNumber: p.firstOrderOnly ? 1 : null,
+      isActive: p.active,
+    })),
+  ),
   route("POST", `${A}/promo-codes`, "promo-codes", ({ body, user }) => {
-    const p = body as unknown as PromoCode;
-    if (db().promos.some((x) => x.code === p.code)) throw invalid("Ce code existe déjà.");
-    db().promos.unshift(p);
-    audit(user, "Argent", `A créé le code promo ${p.code}`);
-    return p;
+    const code = str(body, "code");
+    if (db().promos.some((x) => x.code === code)) throw invalid("Ce code existe déjà.");
+    db().promos.unshift({
+      id: code,
+      code,
+      description: str(body, "displayText"),
+      kind: body.discountType === "PERCENTAGE" ? "percent" : "fixed",
+      value: num(body, "discountValue"),
+      cap: typeof body.maxDiscountAmount === "number" ? body.maxDiscountAmount : null,
+      maxUses: num(body, "maxTotalUsages"),
+      used: 0,
+      services: body.vertical === "DELIVERY_B2C" ? ["delivery"] : ["ride"],
+      startsAt: str(body, "startDate"),
+      endsAt: str(body, "endDate"),
+      fundedBy: body.fundedBy === "WAMI" ? "wami" : "shared",
+      firstOrderOnly: body.usageNumber === 1,
+      active: body.isActive !== false,
+    });
+    audit(user, "Argent", `A créé le code promo ${code}`);
+    return { promoCodeId: code };
   }),
-  route("PATCH", `${A}/promo-codes/:code`, "promo-codes", ({ params, body, user }) => {
-    const p = find(db().promos, (x) => x.code === params.code);
-    const active = body.active === true;
-    audit(user, "Argent", `${active ? "A activé" : "A désactivé"} le code ${p.code}`);
-    return replace(db().promos, (x) => x.code === p.code, { ...p, active });
+  route("PATCH", `${A}/promo-codes/:id/toggle`, "promo-codes", ({ params, user }) => {
+    const p = find(db().promos, (x) => x.id === params.id);
+    audit(user, "Argent", `A ${p.active ? "désactivé" : "activé"} le code ${p.code}`);
+    replace(db().promos, (x) => x.id === p.id, { ...p, active: !p.active });
+    return { isActive: !p.active };
   }),
 
   // ── Affiliation ──

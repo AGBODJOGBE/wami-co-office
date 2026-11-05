@@ -483,9 +483,9 @@ export function seed(): MockDb {
       ],
     },
     promos: [
-      { code: "BIENVENUE", description: "1re course à moitié prix", kind: "percent", value: 50, cap: 1000, maxUses: 1000, used: 312, services: ["ride"], startsAt: daysAgo(10), endsAt: daysFromNow(25), fundedBy: "wami", firstOrderOnly: true, active: true },
-      { code: "LIVRAISON0", description: "Livraison offerte dès 5 000 F de repas", kind: "fixed", value: 800, cap: null, maxUses: 500, used: 498, services: ["meal"], startsAt: daysAgo(20), endsAt: daysFromNow(10), fundedBy: "shared", firstOrderOnly: false, active: true },
-      { code: "NOEL2026", description: "−15 % sur les billets de bus", kind: "percent", value: 15, cap: 2000, maxUses: 2000, used: 0, services: ["bus"], startsAt: daysFromNow(40), endsAt: daysFromNow(55), fundedBy: "wami", firstOrderOnly: false, active: true },
+      { id: "BIENVENUE", code: "BIENVENUE", description: "1re course à moitié prix", kind: "percent", value: 50, cap: 1000, maxUses: 1000, used: 312, services: ["ride"], startsAt: daysAgo(10), endsAt: daysFromNow(25), fundedBy: "wami", firstOrderOnly: true, active: true },
+      { id: "LIVRAISON0", code: "LIVRAISON0", description: "Livraison offerte dès 5 000 F de repas", kind: "fixed", value: 800, cap: null, maxUses: 500, used: 498, services: ["meal"], startsAt: daysAgo(20), endsAt: daysFromNow(10), fundedBy: "shared", firstOrderOnly: false, active: true },
+      { id: "NOEL2026", code: "NOEL2026", description: "−15 % sur les billets de bus", kind: "percent", value: 15, cap: 2000, maxUses: 2000, used: 0, services: ["bus"], startsAt: daysFromNow(40), endsAt: daysFromNow(55), fundedBy: "wami", firstOrderOnly: false, active: true },
     ],
     affiliates: [
       { id: "af-1", name: "[Apporteur] Agence Mobilité Plus", kind: "agency", phone: "+229 01 96 00 10 10", code: "MOBPLUS", activations: 42, pending: 6, ratePerActivation: 5_000, paid: 150_000, status: "active" },

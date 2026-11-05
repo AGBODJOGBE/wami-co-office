@@ -131,7 +131,9 @@ export const API = {
   },
   promoCodes: {
     list: `${A}/promo-codes`,
-    item: (code: string) => `${A}/promo-codes/${code}`,
+    toggle: (id: string) => `${A}/promo-codes/${id}/toggle`,
+    affiliate: (id: string) => `${A}/promo-codes/${id}/affiliate`,
+    marginResidual: (id: string) => `${A}/promo-codes/${id}/margin-residual`,
   },
   affiliate: {
     list: `${A}/affiliates`,

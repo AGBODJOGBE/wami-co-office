@@ -30,3 +30,10 @@ declareReal("POST", "/v1/admin/contracts/:id/manual-payment");
 declareReal("POST", "/v1/admin/contracts/:id/suspend");
 declareReal("POST", "/v1/admin/contracts/:id/resume");
 declareReal("POST", "/v1/admin/contracts/:id/break");
+
+// Codes promo
+declareReal("GET", "/v1/admin/promo-codes");
+declareReal("POST", "/v1/admin/promo-codes");
+declareReal("PATCH", "/v1/admin/promo-codes/:id/toggle");
+declareReal("PATCH", "/v1/admin/promo-codes/:id/affiliate");
+declareReal("PATCH", "/v1/admin/promo-codes/:id/margin-residual");
