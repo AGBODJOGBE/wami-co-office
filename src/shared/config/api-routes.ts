@@ -31,7 +31,12 @@ export const API = {
   },
   rides: {
     list: `${A}/rides`,
-    cancel: (id: string) => `${A}/rides/${id}/cancel`,
+    detail: (id: string) => `${A}/rides/${id}`,
+    status: (id: string) => `${A}/rides/${id}/status`,
+    telemetry: (id: string) => `${A}/rides/${id}/telemetry`,
+    matching: (id: string) => `${A}/rides/${id}/matching`,
+    track: (id: string) => `${A}/rides/${id}/track`,
+    guaranteeSettlement: (id: string) => `${A}/rides/${id}/guarantee-settlement`,
   },
   delivery: {
     list: `${A}/deliveries`,

@@ -9,3 +9,8 @@ declareReal("GET", "/v1/admin/me/permissions");
 declareReal("GET", "/v1/admin/drivers");
 declareReal("PATCH", "/v1/admin/drivers/:id/suspend");
 declareReal("PATCH", "/v1/admin/drivers/:id/reactivate");
+
+// Courses
+declareReal("GET", "/v1/admin/rides");
+declareReal("GET", "/v1/admin/rides/:id");
+declareReal("PATCH", "/v1/admin/rides/:id/status");

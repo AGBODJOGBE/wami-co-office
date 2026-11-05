@@ -80,18 +80,40 @@ export const operationsRoutes: MockRoute[] = [
   }),
 
   // ── Courses ──
-  route("GET", `${A}/rides`, "rides", ({ query }) => {
-    const status = query.get("status");
-    const q = query.get("q") ?? "";
-    return db().rides.filter((r) => (!status || r.status === status) && matches(q, r.id, r.customerName, r.driverName ?? ""));
+  // Même contrat que le backend WAMI (GET /api/admin/rides, PATCH /api/admin/rides/:id/status).
+  route("GET", `${A}/rides`, "rides", () => {
+    const rides = db().rides.map((r) => {
+      const [firstName = "", ...rest] = r.customerName.split(" ");
+      const [dFirst = "", ...dRest] = (r.driverName ?? "").split(" ");
+      return {
+        rideId: r.id,
+        rideNumber: r.id,
+        status: r.status === "completed" ? "COMPLETED" : r.status === "cancelled" ? "CANCELLED_SYSTEM" : "IN_PROGRESS",
+        vehicleType: r.category === "moto" ? "MOTO" : r.category === "tricycle" ? "TRICYCLE" : r.category === "autoEco" ? "ECO" : "CONFORT",
+        paymentMethod: r.payment === "cash" ? "CASH" : r.payment === "wallet" ? "WALLET" : "MOBILE_MONEY",
+        passenger: { firstName, lastName: rest.join(" ") },
+        driver: r.driverName ? { firstName: dFirst, lastName: dRest.join(" ") } : null,
+        pickup: { address: r.from },
+        dropoff: { address: r.to },
+        pricing: { estimatedPrice: r.price, finalPrice: r.status === "completed" ? r.price : null, waitingFee: r.waitingFee, platformCommission: r.commission },
+        distance: { estimatedMeters: r.distanceKm * 1000, actualMeters: null },
+        duration: { estimatedSeconds: r.durationMin * 60, actualSeconds: null },
+        cancelledBy: r.cancelledBy === "customer" ? "PASSENGER" : r.cancelledBy === "driver" ? "DRIVER" : r.cancelledBy ? "SYSTEM" : null,
+        cancellationReason: r.cancelReason,
+        createdAt: r.requestedAt,
+      };
+    });
+    return { rides, total: rides.length, page: 1, limit: 200 };
   }),
-  route("POST", `${A}/rides/:id/cancel`, "rides", ({ params, body, user }) => {
+  route("PATCH", `${A}/rides/:id/status`, "rides", ({ params, body, user }) => {
     const reason = str(body, "reason");
-    requireText(reason, 5, "Motif obligatoire.");
+    requireText(reason, 1, "reason is required");
     const r = find(db().rides, (x) => x.id === params.id);
-    if (r.status !== "inProgress") throw invalid("Seule une course en cours peut être annulée.");
+    if (str(body, "status") !== "CANCELLED_SYSTEM") throw invalid("Admin cannot transition ride to this status");
+    if (r.status !== "inProgress") throw invalid(`Admin cannot transition ride from ${r.status.toUpperCase()} to CANCELLED_SYSTEM`);
     audit(user, "Opérations", `A annulé la course ${r.id} · ${reason}`);
-    return replace(db().rides, (x) => x.id === r.id, { ...r, status: "cancelled", cancelReason: reason, cancelledBy: "admin" });
+    replace(db().rides, (x) => x.id === r.id, { ...r, status: "cancelled", cancelReason: reason, cancelledBy: "admin" });
+    return { rideId: r.id, rideNumber: r.id, oldStatus: "IN_PROGRESS", newStatus: "CANCELLED_SYSTEM", reason };
   }),
 
   // ── Livraisons ──

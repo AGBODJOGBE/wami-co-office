@@ -13,6 +13,8 @@ export type RideStatus = "inProgress" | "completed" | "cancelled";
 
 export interface Ride {
   id: string;
+  /** Numéro lisible (celui que voient le client et le chauffeur). */
+  number: string;
   category: RideCategory;
   status: RideStatus;
   customerName: string;

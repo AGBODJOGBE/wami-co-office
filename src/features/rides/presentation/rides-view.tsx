@@ -63,7 +63,7 @@ export function RidesView() {
                     onSelect={setSelected}
                     empty="Aucune course pour ce filtre."
                     columns={[
-                      { key: "id", header: "Course", render: (r) => r.id },
+                      { key: "id", header: "Course", render: (r) => r.number },
                       { key: "cat", header: "Catégorie", render: (r) => RIDE_CATEGORY_LABELS[r.category] },
                       { key: "status", header: "Statut", render: (r) => <Tag tone={STATUS[r.status][1]}>{STATUS[r.status][0]}</Tag> },
                       { key: "route", header: "Trajet", render: (r) => `${r.from} → ${r.to}` },
@@ -101,7 +101,7 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
   return (
     <Card className="flex flex-col gap-1 px-4 py-3.5">
       <div className="flex items-center justify-between">
-        <b className="text-[15px]">{ride.id}</b>
+        <b className="text-[15px]">{ride.number}</b>
         <Tag tone={STATUS[ride.status][1]}>{STATUS[ride.status][0]}</Tag>
       </div>
       <InfoRow label="Client">{ride.customerName}</InfoRow>
@@ -122,7 +122,7 @@ function RidePanel({ ride, onChange }: { ride: Ride; onChange: (r: Ride) => void
       </Button>
       <Dialog
         open={open}
-        title={`Annuler ${ride.id}`}
+        title={`Annuler ${ride.number}`}
         onClose={() => setOpen(false)}
         footer={
           <>
