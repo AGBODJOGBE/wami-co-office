@@ -6,6 +6,12 @@ import type { Challenge } from "../seed-types";
 
 const A = "/v1/admin";
 
+/** Partenaires en attente de démonstration (état en mémoire, comme le reste du faux backend). */
+const mockPartners: Array<{ id: string; companyName: string; companyType: string; contactPhone: string; contactEmail: string | null; registrationNumber: string | null; createdAt: string }> = [
+  { id: "pt-1", companyName: "Chez Mama Koffi", companyType: "RESTAURANT", contactPhone: "+229 01 96 11 22 33", contactEmail: "mama@example.bj", registrationNumber: "RB/COT/21 B 1234", createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+  { id: "pt-2", companyName: "Pharmacie du Port", companyType: "PHARMACY", contactPhone: "+229 01 96 44 55 66", contactEmail: null, registrationNumber: null, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
+];
+
 /** Contrats passés en prélèvement sur les revenus (démonstration), avec leur taux. */
 const mockShare = new Map<string, number>();
 
@@ -138,6 +144,16 @@ export const networkRoutes: MockRoute[] = [
     audit(user, "Comptes", `A réactivé ${d.name}`);
     replace(db().drivers, (x) => x.id === d.id, { ...d, status: "active", online: false, suspensionReason: null });
     return { driverId: d.id, status: "OFFLINE", message: "Driver reactivated successfully" };
+  }),
+
+  // Partenaires à valider (contrat du backend WAMI : GET /api/admin/partners/pending, PATCH …/validate).
+  route("GET", `${A}/partners/pending`, "partners", () => ({ partners: mockPartners, total: mockPartners.length })),
+  route("PATCH", `${A}/partners/:id/validate`, "partners", ({ params, user }) => {
+    const i = mockPartners.findIndex((p) => p.id === params.id);
+    if (i < 0) throw invalid("Partner not found");
+    const [p] = mockPartners.splice(i, 1);
+    audit(user, "Comptes", `A validé le partenaire ${p!.companyName}`);
+    return { partnerId: p!.id, companyName: p!.companyName, status: "ACTIVE", message: "Partner validated" };
   }),
 
   // ── Véhicules ──

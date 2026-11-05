@@ -185,3 +185,7 @@ declareReal("GET", "/v1/admin/contracts/:id/revenue-share/withholdings");
 declareReal("POST", "/v1/admin/contracts/:id/repayment-mode");
 declareReal("PATCH", "/v1/admin/contracts/:id/revenue-share-rate");
 declareReal("POST", "/v1/admin/contracts/drivers/:id/unblock");
+
+// Partenaires à valider
+declareReal("GET", "/v1/admin/partners/pending");
+declareReal("PATCH", "/v1/admin/partners/:id/validate");

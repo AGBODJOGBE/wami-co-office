@@ -30,6 +30,7 @@ export const NAVIGATION: NavGroup[] = [
     items: [
       { module: "documents", href: "/documents", label: "Vérifications" },
       { module: "drivers", href: "/drivers", label: "Chauffeurs et livreurs" },
+      { module: "partners", href: "/partners", label: "Partenaires à valider" },
       { module: "vehicles", href: "/vehicles", label: "Véhicules" },
       { module: "contracts", href: "/contracts", label: "Contrats location-vente" },
       { module: "driver-bonus", href: "/driver-bonus", label: "Primes chauffeurs" },

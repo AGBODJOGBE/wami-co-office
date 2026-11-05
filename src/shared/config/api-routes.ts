@@ -55,6 +55,10 @@ export const API = {
     list: `${A}/delivery`,
     order: (id: string) => `${A}/delivery/${id}`,
   },
+  partners: {
+    pending: `${A}/partners/pending`,
+    validate: (id: string) => `${A}/partners/${id}/validate`,
+  },
   vtc: {
     categories: `${A}/vtc/categories`,
     category: (key: string) => `${A}/vtc/categories/${key}`,
